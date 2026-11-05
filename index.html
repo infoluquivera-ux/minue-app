@@ -1065,8 +1065,10 @@
   }
 
   var moneyFormat = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  var moneyCentavos = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 });
   function money(n) {
-    return moneyFormat.format(Math.round((Number(n) || 0) * 100) / 100).replace(/\u00a0/g, ' ');
+    var valor = Math.round((Number(n) || 0) * 100) / 100;
+    return (Number.isInteger(valor) ? moneyFormat : moneyCentavos).format(valor).replace(/\u00a0/g, ' ');
   }
 
   /** Igual criterio que el servidor: "15.000", "$ 15.000,50", "15000.5". Devuelve null si no es válido. */
@@ -3668,7 +3670,7 @@
         };
         write('crearPedido', payload, 'Pedido de ' + c.nombre).then(function (res) {
           store('minue.borrador', undefined);
-          closeSheet();
+          closeSheet(true);
           leave();
           drawSaved(res);
         }, function (error) {
