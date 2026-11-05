@@ -475,6 +475,7 @@
       <button type="button" class="drawer-item" data-go="cobros" aria-label="Plata"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg><span>Plata</span></button>
     </nav>
     <div class="drawer-group">
+      <button id="menu-catalogo" type="button" class="drawer-item" data-go="catalogo" aria-label="Catálogo" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8l8-4 8 4v9l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v9"/></svg><span>Catálogo</span></button>
       <button id="menu-ajustes" type="button" class="drawer-item" data-go="ajustes" aria-label="Ajustes" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>Ajustes</span></button>
       <button id="zoom" type="button" class="drawer-item" aria-label="Cambiar el tamaño de la letra"><span class="drawer-aa" aria-hidden="true">Aa</span><span id="zoom-label">Letra normal</span></button>
       <button id="logout" type="button" class="drawer-item" aria-label="Salir" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5M15 8l4 4-4 4M19 12H9"/></svg><span>Salir</span></button>
@@ -926,7 +927,10 @@
           if (draft && draft.requestId === item.payload.requestId) store('minue.borrador', undefined);
           saved++;
         }, function (error) {
-          if (RETRYABLE.indexOf(error.code) === -1) outboxRemove(item.payload.requestId);
+          if (RETRYABLE.indexOf(error.code) === -1) {
+            outboxRemove(item.payload.requestId);
+            toast(item.label + ': ' + (error.message || 'no se pudo guardar.'), { error: true });
+          }
         });
       });
     }, Promise.resolve()).then(function () {
@@ -1232,7 +1236,7 @@
     });
     window.scrollTo(0, 0);
     setFab(true);
-    ({ inicio: renderHoy, recorrido: renderHoy, pedidos: renderPedidos, clientes: renderClientes, cobros: renderCobros, ajustes: renderAjustes }[tab])();
+    ({ inicio: renderHoy, recorrido: renderHoy, pedidos: renderPedidos, clientes: renderClientes, cobros: renderCobros, ajustes: renderAjustes, catalogo: renderCatalogo }[tab])();
   }
 
   function refresh() {
@@ -1946,6 +1950,160 @@
     ]), 'Editar pedido');
   }
 
+
+  /* ---------------- Catálogo ---------------- */
+
+  function renderCatalogo() {
+    S.current = renderCatalogo;
+    setFab(false);
+    loading();
+    call('productos').then(function (d) {
+      clear(main);
+      main.appendChild(el('h1', { text: 'Catálogo' }));
+      main.appendChild(el('p', { class: 'sub', text: 'Comisión general: ' + String(d.comisionGeneral).replace('.', ',') + ' %. Se usa en los productos sin comisión propia.' }));
+      if (S.rol === 'admin') {
+        main.appendChild(el('div', { class: 'stack' }, [
+          btn('Nuevo producto', 'secondary', function () { openProductoForm(null); }, 'plus'),
+          btn('Aumentar precios', 'secondary', function () { openAumento(d); })
+        ]));
+      }
+      var lista = el('div', { style: 'margin-top:12px' });
+      d.productos.forEach(function (p) {
+        lista.appendChild(el('button', { class: 'list-item', type: 'button', onclick: function () { openProducto(p); } }, [
+          el('div', { class: 'row' }, [el('strong', { text: p.nombre }), p.activo ? null : el('span', { class: 'badge', text: 'Inactivo' })]),
+          el('div', { class: 'small', text: 'Caja ' + money(p.precios.CAJA) + ' · Bulto ' + money(p.precios.BULTO) }),
+          el('div', { class: 'small', text: 'Comisión por caja ' + money(p.comisiones.CAJA) + ' · por bulto ' + money(p.comisiones.BULTO) })
+        ]));
+      });
+      if (!d.productos.length) lista.appendChild(el('div', { class: 'card empty' }, [el('strong', { text: 'Todavía no hay productos' }), el('span', { text: 'Tocá Nuevo producto para cargar el primero.' })]));
+      main.appendChild(lista);
+    }, function (e) { showError(e, renderCatalogo); });
+  }
+
+  function openProducto(p) {
+    var historial = el('div', { class: 'small', text: 'Cargando cambios…' });
+    function fila(nombre, clave) {
+      return row(nombre + ' · ' + money(p.precios[clave]), 'Comisión ' + money(p.comisiones[clave]), true);
+    }
+    var acciones = el('div', { class: 'stack', style: 'margin-top:14px' });
+    if (S.rol === 'admin') acciones.appendChild(btn('Editar producto', 'primary', function () { openProductoForm(p); }));
+    acciones.appendChild(btn('Cerrar', 'secondary', closeSheet));
+    openSheet([
+      el('h2', { text: p.nombre }),
+      p.sabor ? el('p', { class: 'small', style: 'margin-top:0', text: p.sabor }) : null,
+      el('div', { class: 'summary' }, [fila('Unidad', 'UNIDAD'), fila('Caja', 'CAJA'), fila('Bulto', 'BULTO')]),
+      el('div', { class: 'summary' }, [
+        row('Unidades por caja', String(p.unidadesPorCaja)), row('Cajas por bulto', String(p.cajasPorBulto)),
+        row('Alfajores por bulto', String(p.unidadesPorBulto)),
+        row('Comisión', String(p.comisionAplicada).replace('.', ',') + ' %' + (p.comision === null ? ' (la general)' : ''))
+      ]),
+      el('p', { class: 'small', text: 'Últimos cambios' }), historial, acciones
+    ], p.nombre);
+    call('historialPrecios', { productId: p.id }).then(function (h) {
+      clear(historial);
+      if (!h.cambios.length) { historial.textContent = 'Sin cambios todavía.'; return; }
+      h.cambios.slice(0, 8).forEach(function (c) {
+        var porcentaje = /%/.test(c.campo);
+        function valor(v) { return v === null ? 'general' : porcentaje ? String(Number(v)).replace('.', ',') + ' %' : money(v); }
+        historial.appendChild(el('div', { text: dayLabel(c.fecha) + ' · ' + c.campo + ': ' + valor(c.antes) + ' → ' + valor(c.despues) + (c.quien ? ' · ' + c.quien : '') }));
+      });
+    }, function () { historial.textContent = 'No pudimos traer los cambios.'; });
+  }
+
+  function openProductoForm(p) {
+    var v = p || { nombre: '', sabor: '', categoria: 'Alfajor', unidadesPorCaja: '', cajasPorBulto: '', precios: { UNIDAD: '', CAJA: '', BULTO: '' }, comision: null, activo: true };
+    function campo(texto, valor, attrs) {
+      var input = el('input', Object.assign({ class: 'input', value: valor === null || valor === undefined ? '' : String(valor), 'aria-label': texto }, attrs || {}));
+      return { input: input, nodo: el('label', { class: 'field' }, [el('span', { text: texto }), input]) };
+    }
+    var num = { inputmode: 'numeric' };
+    var dec = { inputmode: 'decimal' };
+    var nombre = campo('Nombre', v.nombre, { maxlength: '80' });
+    var sabor = campo('Sabor', v.sabor, { maxlength: '60' });
+    var categoria = campo('Categoría', v.categoria, { maxlength: '40' });
+    var porCaja = campo('Unidades por caja', v.unidadesPorCaja, num);
+    var porBulto = campo('Cajas por bulto', v.cajasPorBulto, num);
+    var unidad = campo('Precio por unidad', v.precios.UNIDAD, dec);
+    var caja = campo('Precio por caja', v.precios.CAJA, dec);
+    var bulto = campo('Precio por bulto', v.precios.BULTO, dec);
+    var comision = campo('Comisión (%)', v.comision, dec);
+    var activo = v.activo;
+    var activoBox = el('div');
+    function drawActivo() {
+      clear(activoBox);
+      activoBox.appendChild(chipRow([[true, 'Se vende'], [false, 'No se vende']], activo, function (x) { activo = x; drawActivo(); }, 'Estado del producto'));
+    }
+    drawActivo();
+    var error = el('div', { class: 'error-box', hidden: true });
+    var save = el('button', { class: 'btn primary', type: 'button', text: 'Guardar producto' });
+    var requestId = uuid();
+    save.addEventListener('click', function () {
+      error.hidden = true;
+      setBusy(save, 'Guardando…');
+      write('guardarProducto', { requestId: requestId, productId: p ? p.id : '', rev: p ? p.rev : '', producto: {
+        nombre: nombre.input.value, sabor: sabor.input.value, categoria: categoria.input.value,
+        unidadesPorCaja: porCaja.input.value, cajasPorBulto: porBulto.input.value, precioUnidad: unidad.input.value,
+        precioCaja: caja.input.value, precioBulto: bulto.input.value, comision: comision.input.value, activo: activo
+      } }, 'Guardar producto').then(function () { afterFix(p ? 'Producto actualizado.' : 'Producto creado.'); }, function (e) {
+        unsetBusy(save);
+        requestId = uuid();
+        error.textContent = e.code === 'NETWORK' ? 'No hay señal. Quedó arriba para reintentar.' : e.message || 'No se pudo guardar.';
+        error.hidden = false;
+      });
+    });
+    openSheet([el('h2', { text: p ? 'Editar producto' : 'Nuevo producto' }), nombre.nodo, sabor.nodo, categoria.nodo, porCaja.nodo, porBulto.nodo,
+      unidad.nodo, caja.nodo, bulto.nodo, comision.nodo,
+      el('p', { class: 'small', text: 'Dejá la comisión vacía para usar la general. Las ventas ya hechas no cambian.' }),
+      el('div', { class: 'field' }, [el('span', { text: 'Estado' }), activoBox]), error,
+      el('div', { class: 'stack', style: 'margin-top:14px' }, [save, btn('Volver', 'secondary', closeSheet)])
+    ], p ? 'Editar producto' : 'Nuevo producto');
+  }
+
+  function openAumento() {
+    var porcentaje = el('input', { class: 'input', inputmode: 'decimal', 'aria-label': 'Porcentaje de aumento' });
+    var redondeo = 10;
+    var redondeoBox = el('div');
+    function drawRedondeo() {
+      clear(redondeoBox);
+      redondeoBox.appendChild(chipRow([[1, 'Sin redondear'], [10, 'A 10'], [50, 'A 50'], [100, 'A 100']], redondeo, function (x) { redondeo = x; drawRedondeo(); }, 'Redondeo'));
+    }
+    drawRedondeo();
+    var error = el('div', { class: 'error-box', hidden: true });
+    var ver = el('button', { class: 'btn primary', type: 'button', text: 'Ver cómo quedan' });
+    ver.addEventListener('click', function () {
+      error.hidden = true;
+      setBusy(ver, 'Calculando…');
+      call('vistaAumento', { porcentaje: porcentaje.value, redondeo: redondeo }).then(function (v) {
+        unsetBusy(ver);
+        var requestId = uuid();
+        var aplicar = el('button', { class: 'btn primary', type: 'button', text: 'Aplicar aumento' });
+        var fallo = el('div', { class: 'error-box', hidden: true });
+        aplicar.addEventListener('click', function () {
+          setBusy(aplicar, 'Aplicando…');
+          write('aplicarAumento', { requestId: requestId, porcentaje: porcentaje.value, redondeo: redondeo }, 'Aumento de precios').then(function (r) {
+            afterFix('Aumento aplicado a ' + r.productos + (r.productos === 1 ? ' producto.' : ' productos.'));
+          }, function (e) {
+            unsetBusy(aplicar);
+            fallo.textContent = e.message || 'No se pudo aplicar.';
+            fallo.hidden = false;
+          });
+        });
+        openSheet([el('h2', { text: 'Así quedarían los precios' }),
+          el('p', { class: 'small', text: 'Las ventas ya hechas no cambian.' })].concat(v.productos.map(function (p) {
+          return el('div', { class: 'summary' }, [el('strong', { text: p.nombre }), row('Caja', money(p.cajaAntes) + ' → ' + money(p.caja)), row('Bulto', money(p.bultoAntes) + ' → ' + money(p.bulto))]);
+        }), [fallo, el('div', { class: 'stack', style: 'margin-top:14px' }, [aplicar, btn('Volver', 'secondary', closeSheet)])]), 'Vista previa del aumento');
+      }, function (e) {
+        unsetBusy(ver);
+        error.textContent = e.message || 'No se pudo calcular.';
+        error.hidden = false;
+      });
+    });
+    openSheet([el('h2', { text: 'Aumentar precios' }), el('p', { text: 'Se aplica a todos los productos que se venden. Primero vas a ver cómo quedan.' }),
+      el('label', { class: 'field' }, [el('span', { text: 'Porcentaje de aumento' }), porcentaje]),
+      el('div', { class: 'field' }, [el('span', { text: 'Redondeo' }), redondeoBox]), error,
+      el('div', { class: 'stack', style: 'margin-top:14px' }, [ver, btn('Volver', 'secondary', closeSheet)])], 'Aumentar precios');
+  }
+
   /* ---------------- Ajustes (solo administradores) ---------------- */
 
   function celda(valor) {
@@ -2318,7 +2476,7 @@
           requestId: draft.requestId, clientId: draft.clientId, fecha: draft.fecha, desde: draft.desde, hasta: draft.hasta,
           prioridad: draft.prioridad, recibe: draft.recibe, observaciones: draft.observaciones,
           lineas: lineIds.map(function (id) { return { productId: id, presentacion: draft.lines[id].presentacion, cantidad: draft.lines[id].cantidad }; }),
-          pagoInicial: paid || 0, medio: paid > 0 ? draft.medio : ''
+          pagoInicial: paid || 0, medio: paid > 0 ? draft.medio : '', totalEsperado: total
         };
         write('crearPedido', payload, 'Pedido de ' + c.nombre).then(function (res) {
           store('minue.borrador', undefined);
@@ -2672,6 +2830,7 @@
     if (WEB && WEB.email) USER = WEB.email;
     if (WEB) {
       S.rol = load('minue.rol', '');
+      document.getElementById('menu-catalogo').hidden = false;
       document.getElementById('menu-ajustes').hidden = S.rol !== 'admin';
       call('yo').then(function (y) {
         S.rol = y.rol;
