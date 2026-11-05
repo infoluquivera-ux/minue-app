@@ -1,5 +1,5 @@
 /* MINUÉ · service worker: la app abre sin señal. Nunca guarda llamadas a la API ni a Google. */
-var VERSION = 'minue-1.17.4-1793909229281';
+var VERSION = 'minue-1.18.0-1793910073595';
 var SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'favicon.png'];
 
 self.addEventListener('install', function (event) {

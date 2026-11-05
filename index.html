@@ -557,6 +557,14 @@
     .fab { width: 72px; }
   }
   @media (min-width: 960px) { .solo-cel { display: none; } }
+
+  /* Presentaciones libres */
+  .pres-fila { padding: var(--sp-3); margin-bottom: var(--sp-2); background: var(--c-sunken); border-radius: var(--r-md); }
+  .pres-fila .field { margin-top: 0; }
+  .pres-fila .tuto-saltar { display: block; margin-left: auto; }
+  .seg-libre { flex-wrap: wrap; }
+  .seg-libre .chip { min-height: 44px; padding: 6px 12px; }
+  .product-controls { flex-wrap: wrap; }
 </style>
 
   <style>
@@ -1639,11 +1647,16 @@
     return null;
   }
 
+  function presDe(p, nombre) {
+    return (p.presentaciones || []).filter(function (x) { return x.nombre === nombre; })[0];
+  }
+
   /** "2 cajas", "1 bulto", "12 unidades". */
   function qtyText(n, presentation) {
     var p = String(presentation || '').toLowerCase();
     if (n === 1) return '1 ' + p;
-    return n + ' ' + (p === 'unidad' ? 'unidades' : p + 's');
+    if (p === 'unidad') return n + ' unidades';
+    return p.indexOf(' ') === -1 && /[aeiou]$/.test(p) ? n + ' ' + p + 's' : n + ' × ' + p;
   }
 
   /** Vibración corta al confirmar; se apaga con "reducir movimiento" y no se repite seguida. */
@@ -2379,7 +2392,7 @@
         recalc();
       }
       return el('div', { class: 'summary' }, [
-        el('div', { text: l.producto + ' · ' + nice(l.presentacion) }),
+        el('div', { text: l.producto + ' · ' + l.presentacion }),
         el('div', { class: 'small', text: money(l.precio) + ' cada una. Si la bajás a 0, se quita.' }),
         el('div', { class: 'stepper' }, [
           el('button', { type: 'button', text: '−', 'aria-label': 'Menos ' + l.producto, onclick: function () { change(-1); } }), shown,
@@ -2511,17 +2524,15 @@
       el('div', { class: 'hero-addr', text: comparar(a.comision, d.anterior.comision, d.anterior) })
     ]));
     caja.appendChild(el('div', { class: 'pills panel-pills' }, [
-      tarjetaDato('Bultos', numero(a.bultos)), tarjetaDato('Cajas', numero(a.cajas)), tarjetaDato('Alfajores', numero(a.alfajores)),
-      tarjetaDato('Ventas', numero(a.ventas)), tarjetaDato('Clientes', numero(a.clientes)),
+      tarjetaDato('Alfajores', numero(a.alfajores)), tarjetaDato('Ventas', numero(a.ventas)), tarjetaDato('Clientes', numero(a.clientes)),
       tarjetaDato('Venta promedio', money(Number(a.facturacion) / a.ventas))
-    ]));
+    ].concat(a.presentaciones.map(function (x) { return tarjetaDato(x.nombre, numero(x.cantidad)); }))));
     caja.appendChild(el('div', { class: 'pills' }, [tarjetaDato('Cobrado en el período', money(a.cobrado)), tarjetaDato('Te deben hoy', money(d.pendiente))]));
     if (d.serie.length > 1) caja.appendChild(graficoPanel(d.serie));
     caja.appendChild(el('h2', { text: 'Por producto' }));
     d.porProducto.forEach(function (p) {
       var partes = [];
-      if (Number(p.bultos)) partes.push(numero(p.bultos) + (Number(p.bultos) === 1 ? ' bulto' : ' bultos'));
-      if (Number(p.cajas)) partes.push(numero(p.cajas) + (Number(p.cajas) === 1 ? ' caja' : ' cajas'));
+      p.presentaciones.forEach(function (x) { partes.push(qtyText(Number(x.cantidad), x.nombre)); });
       partes.push(numero(p.alfajores) + ' alfajores');
       caja.appendChild(el('div', { class: 'card' }, [
         el('div', { class: 'row' }, [el('strong', { text: p.producto }), el('span', { class: 'money', text: money(p.facturacion) })]),
@@ -2583,8 +2594,7 @@
       ]));
       var lista = el('div', { style: 'margin-top:12px' });
       d.productos.forEach(function (p) {
-        var precios = [['Unidad', 'UNIDAD'], ['Caja', 'CAJA'], ['Bulto', 'BULTO']].filter(function (x) { return p.precios[x[1]] > 0; })
-          .map(function (x) { return x[0] + ' ' + money(p.precios[x[1]]); }).join(' · ');
+        var precios = p.presentaciones.map(function (x) { return x.nombre + ' ' + money(x.precio); }).join(' · ');
         lista.appendChild(el('button', { class: 'list-item prod-fila', type: 'button', onclick: function () { openProducto(p); } }, [
           fotoProducto(p),
           el('div', { class: 'prod-datos' }, [
@@ -2600,8 +2610,8 @@
 
   function openProducto(p) {
     var historial = el('div', { class: 'small', text: 'Cargando cambios…' });
-    function fila(nombre, clave) {
-      return row(nombre + ' · ' + money(p.precios[clave]), 'Comisión ' + money(p.comisiones[clave]), true);
+    function fila(x) {
+      return row(x.nombre + ' · ' + money(x.precio), x.unidades + (x.unidades === 1 ? ' unidad' : ' unidades') + ' · comisión ' + money(x.comision), true);
     }
     var acciones = el('div', { class: 'stack', style: 'margin-top:14px' });
     acciones.appendChild(btn('Editar producto', 'primary', function () { openProductoForm(p); }));
@@ -2610,10 +2620,8 @@
       fotoProducto(p, 'grande'),
       el('h2', { text: p.nombre }),
       p.sabor ? el('p', { class: 'small', style: 'margin-top:0', text: p.sabor }) : null,
-      el('div', { class: 'summary' }, [['Unidad', 'UNIDAD'], ['Caja', 'CAJA'], ['Bulto', 'BULTO']].filter(function (x) { return p.precios[x[1]] > 0; }).map(function (x) { return fila(x[0], x[1]); })),
+      el('div', { class: 'summary' }, p.presentaciones.map(fila)),
       el('div', { class: 'summary' }, [
-        row('Unidades por caja', String(p.unidadesPorCaja)), row('Cajas por bulto', String(p.cajasPorBulto)),
-        row('Alfajores por bulto', String(p.unidadesPorBulto)),
         row('Comisión', String(p.comisionAplicada).replace('.', ',') + ' %' + (p.comision === null ? ' (la general)' : ''))
       ]),
       el('p', { class: 'small', text: 'Últimos cambios' }), historial, acciones
@@ -2630,7 +2638,7 @@
   }
 
   function openProductoForm(p) {
-    var v = p || { id: 'nuevo', nombre: '', sabor: '', categoria: 'Alfajor', unidadesPorCaja: '', cajasPorBulto: '', precios: { UNIDAD: '', CAJA: '', BULTO: '' }, comision: null, activo: true };
+    var v = p || { id: 'nuevo', nombre: '', sabor: '', categoria: 'Alfajor', presentaciones: [], comision: null, activo: true };
     function campo(texto, valor, attrs) {
       var input = el('input', Object.assign({ class: 'input', value: valor === null || valor === undefined ? '' : String(valor), 'aria-label': texto }, attrs || {}));
       return { input: input, nodo: el('label', { class: 'field' }, [el('span', { text: texto }), input]) };
@@ -2640,11 +2648,24 @@
     var nombre = campo('Nombre', v.nombre, { maxlength: '80' });
     var sabor = campo('Sabor', v.sabor, { maxlength: '60' });
     var categoria = campo('Categoría', v.categoria, { maxlength: '40' });
-    var porCaja = campo('Unidades por caja', v.unidadesPorCaja, num);
-    var porBulto = campo('Cajas por bulto', v.cajasPorBulto, num);
-    var unidad = campo('Precio por unidad', v.precios.UNIDAD, dec);
-    var caja = campo('Precio por caja', v.precios.CAJA, dec);
-    var bulto = campo('Precio por bulto', v.precios.BULTO, dec);
+    var filas = [];
+    var filasCaja = el('div');
+    function agregarFila(x) {
+      var f = {
+        nombre: campo('Presentación', x.nombre, { maxlength: '40', placeholder: 'Ej: Cajita chica' }),
+        unidades: campo('Trae (unidades)', x.unidades, num),
+        precio: campo('Precio', x.precio, dec)
+      };
+      f.nodo = el('div', { class: 'pres-fila' }, [f.nombre.nodo, el('div', { class: 'grid2' }, [f.unidades.nodo, f.precio.nodo]),
+        el('button', { class: 'tuto-saltar', type: 'button', text: 'Quitar', 'aria-label': 'Quitar esta presentación', onclick: function () {
+          filas = filas.filter(function (y) { return y !== f; });
+          f.nodo.remove();
+        } })]);
+      filas.push(f);
+      filasCaja.appendChild(f.nodo);
+      return f;
+    }
+    (v.presentaciones.length ? v.presentaciones : [{ nombre: '', unidades: '', precio: '' }]).forEach(agregarFila);
     var comision = campo('Comisión (%)', v.comision, dec);
     var activo = v.activo;
     var activoBox = el('div');
@@ -2684,8 +2705,8 @@
       setBusy(save, 'Guardando…');
       write('guardarProducto', { requestId: requestId, productId: p ? p.id : '', rev: p ? p.rev : '', producto: {
         nombre: nombre.input.value, sabor: sabor.input.value, categoria: categoria.input.value,
-        unidadesPorCaja: porCaja.input.value || 1, cajasPorBulto: porBulto.input.value || 1, precioUnidad: unidad.input.value || 0,
-        precioCaja: caja.input.value || 0, precioBulto: bulto.input.value || 0, comision: comision.input.value, activo: activo
+        presentaciones: filas.map(function (f) { return { nombre: f.nombre.input.value, unidades: f.unidades.input.value, precio: f.precio.input.value }; }),
+        comision: comision.input.value, activo: activo
       } }, 'Guardar producto').then(function (r) {
         S.catalog = null;
         var id = r.productId || r.entity;
@@ -2702,11 +2723,10 @@
       });
     });
     openSheet([el('h2', { text: p ? 'Editar producto' : 'Nuevo producto' }), fotoCaja, archivo, fotoBotones, nombre.nodo,
-      el('h3', { text: 'Cómo se vende' }),
-      el('p', { class: 'small', text: 'Poné el precio de lo que vendés. Dejá vacío lo que no.' }),
-      el('div', { class: 'grid2' }, [unidad.nodo, el('div')]),
-      el('div', { class: 'grid2' }, [caja.nodo, porCaja.nodo]),
-      el('div', { class: 'grid2' }, [bulto.nodo, porBulto.nodo]),
+      el('h3', { text: 'Presentaciones' }),
+      el('p', { class: 'small', text: 'Cómo lo vendés: cajita chica, caja premium, bulto, lo que sea. Cada una con sus unidades y su precio.' }),
+      filasCaja,
+      btn('Agregar presentación', 'secondary', function () { agregarFila({ nombre: '', unidades: '', precio: '' }).nombre.input.focus(); }, 'plus'),
       el('details', {}, [el('summary', { style: 'font-weight:700;min-height:44px;margin-top:10px;cursor:pointer', text: 'Más datos (opcional)' }), sabor.nodo, categoria.nodo, comision.nodo,
         el('p', { class: 'small', text: 'Dejá la comisión vacía para usar la general. Las ventas ya hechas no cambian.' })]),
       el('div', { class: 'field' }, [el('span', { text: 'Estado' }), activoBox]), error,
@@ -2745,7 +2765,7 @@
         });
         openSheet([el('h2', { text: 'Así quedarían los precios' }),
           el('p', { class: 'small', text: 'Las ventas ya hechas no cambian.' })].concat(v.productos.map(function (p) {
-          return el('div', { class: 'summary' }, [el('strong', { text: p.nombre }), row('Caja', money(p.cajaAntes) + ' → ' + money(p.caja)), row('Bulto', money(p.bultoAntes) + ' → ' + money(p.bulto))]);
+          return el('div', { class: 'summary' }, [el('strong', { text: p.nombre }), ].concat(p.presentaciones.map(function (x) { return row(x.nombre, money(x.antes) + ' → ' + money(x.nuevo)); })));
         }), [fallo, el('div', { class: 'stack', style: 'margin-top:14px' }, [aplicar, btn('Volver', 'secondary', closeSheet)])]), 'Vista previa del aumento');
       }, function (e) {
         unsetBusy(ver);
@@ -2945,20 +2965,28 @@
         el('div', { class: 'tuto-mapa' }, [el('span', { text: '1' })]),
         botonGuia('Guardar ubicación', true)
       ]) },
-      { paso: 3, titulo: 'Sumá tus productos', texto: 'En Productos cargás cada uno con su foto y sus precios por unidad, caja o bulto.', dibujo: telefonoGuia([
+      { paso: 3, titulo: 'Sumá tus productos', texto: 'En la pestaña Productos cargás cada alfajor con su nombre y su foto.', dibujo: telefonoGuia([
         el('strong', { text: 'Productos' }),
-        el('div', { class: 'tuto-parada' }, [el('span', { text: '▣' }), 'Alfajor Ejemplo · Caja $ 12.000']),
-        el('div', { class: 'tuto-parada' }, [el('span', { text: '▣' }), 'Alfajor Mini · Bulto $ 40.000']),
+        el('div', { class: 'tuto-parada' }, [el('span', { text: '▣' }), 'Alfajor de maicena']),
+        el('div', { class: 'tuto-parada' }, [el('span', { text: '▣' }), 'Alfajor premium']),
         botonGuia('Nuevo producto', true)
       ]) },
-      { paso: 4, titulo: 'Cargá un pedido', texto: 'Tocá el botón Pedido. Elegí el cliente, los productos y cuándo se entrega.', dibujo: telefonoGuia([
+      { paso: 4, titulo: 'Armá sus presentaciones', texto: 'Definí cómo vendés cada producto: cajita chica, caja grande, bulto o lo que quieras, con sus unidades y su precio.', dibujo: telefonoGuia([
+        el('strong', { text: 'Presentaciones' }),
+        el('div', { class: 'tuto-fila' }, [el('span', { text: 'Cajita chica · 6' }), el('b', { text: '$ 6.000' })]),
+        el('div', { class: 'tuto-fila' }, [el('span', { text: 'Caja grande · 12' }), el('b', { text: '$ 12.000' })]),
+        el('div', { class: 'tuto-fila' }, [el('span', { text: 'Bulto · 72' }), el('b', { text: '$ 66.000' })]),
+        botonGuia('Agregar presentación', true)
+      ]) },
+      { paso: 5, titulo: 'Cargá un pedido', texto: 'Tocá el botón Pedido. Elegí el cliente, el producto, su presentación y cuándo se entrega.', dibujo: telefonoGuia([
         el('strong', { text: 'Nuevo pedido' }),
         el('div', { class: 'tuto-fila' }, [el('span', { text: 'Cliente' }), el('b', { text: 'Almacén Ejemplo' })]),
-        el('div', { class: 'tuto-fila' }, [el('span', { text: 'Caja de alfajores' }), el('b', { text: '− 2 +' })]),
+        el('div', { class: 'tuto-chips' }, [el('span', { class: 'activo', text: 'Cajita' }), el('span', { text: 'Caja' }), el('span', { text: 'Bulto' })]),
+        el('div', { class: 'tuto-fila' }, [el('span', { text: 'Alfajor de maicena' }), el('b', { text: '− 2 +' })]),
         el('div', { class: 'tuto-fila' }, [el('span', { text: 'Total' }), el('b', { text: '$ 24.000' })]),
         botonGuia('Guardar pedido', true)
       ]) },
-      { paso: 5, titulo: 'Armá el recorrido', texto: 'Aparecen los pedidos y los clientes que reciben ese día. Sumalos y la app sugiere el orden.', dibujo: telefonoGuia([
+      { paso: 6, titulo: 'Armá el recorrido', texto: 'Aparecen los pedidos y los clientes que reciben ese día. Sumalos y la app sugiere el orden.', dibujo: telefonoGuia([
         el('div', { class: 'tuto-card oscura' }, [el('div', { class: 'tuto-kicker', text: 'Volvés a las' }), el('div', { class: 'tuto-grande', text: '12:30' })]),
         el('div', { class: 'tuto-chico', text: 'Suelen recibir los lunes' }),
         ['Almacén Ejemplo · 08:15', 'Kiosco Ejemplo · 09:00'].map(function (t, i) {
@@ -2966,19 +2994,19 @@
         }),
         botonGuia('Guardar recorrido', true)
       ].reduce(function (a, b) { return a.concat(b); }, [])) },
-      { paso: 6, titulo: 'Salí a entregar', texto: 'En Hoy ves la próxima parada. Tocá Ir con Maps y, al llegar, volvé a la app.', dibujo: telefonoGuia([
+      { paso: 7, titulo: 'Salí a entregar', texto: 'En Hoy ves la próxima parada. Tocá Ir con Maps y, al llegar, volvé a la app.', dibujo: telefonoGuia([
         el('strong', { text: 'Hoy llevás 2 de 6' }),
         el('div', { class: 'tuto-barra' }, [el('i')]),
         tarjetaGuia(botonGuia('Ir con Maps', true))
       ]) },
-      { paso: 7, titulo: 'Entregá y cobrá', texto: 'Tocá Entregué y elegí si te pagó todo, una parte o nada. La deuda se actualiza sola.', dibujo: telefonoGuia([
+      { paso: 8, titulo: 'Entregá y cobrá', texto: 'Tocá Entregué y elegí si te pagó todo, una parte o nada. La deuda se actualiza sola.', dibujo: telefonoGuia([
         el('strong', { text: 'Entregar a Almacén Ejemplo' }),
         el('div', { class: 'tuto-chico', text: '¿Te pagó?' }),
         el('div', { class: 'tuto-grande', text: '$ 45.000' }),
         el('div', { class: 'tuto-chips' }, [el('span', { class: 'activo', text: 'Todo' }), el('span', { text: 'Una parte' }), el('span', { text: 'No pagó' })]),
         botonGuia('Entregué y cobré', true)
       ]) },
-      { paso: 8, titulo: 'Mirá cuánto vendiste', texto: 'Abrí el menú y tocá Panel. Ves lo que generaste para MINUÉ y tu comisión.', dibujo: telefonoGuia([
+      { paso: 9, titulo: 'Mirá cuánto vendiste', texto: 'Abrí el menú y tocá Panel. Ves lo que generaste para MINUÉ y tu comisión.', dibujo: telefonoGuia([
         el('div', { class: 'tuto-card oscura' }, [
           el('div', { class: 'tuto-kicker', text: 'Facturación para MINUÉ' }), el('div', { class: 'tuto-grande', text: '$ 1.250.000' }),
           el('div', { class: 'tuto-kicker', text: 'Tu comisión' }), el('div', { class: 'tuto-grande', text: '$ 125.000' })
@@ -2991,7 +3019,7 @@
   function renderAyuda() {
     S.current = renderAyuda;
     setFab(false);
-    store('minue.guia2', '1');
+    store('minue.guia3', '1');
     var pasos = pasosGuia();
     var actual = 0;
     var totalPasos = pasos.filter(function (p) { return p.paso; }).length;
@@ -3645,7 +3673,7 @@
       var skipped = 0;
       repetir.lineas.forEach(function (l) {
         var p = productsById[l.productId];
-        if (!p || !(p.precios[l.presentacion] > 0)) { skipped++; return; }
+        if (!p || !presDe(p, l.presentacion)) { skipped++; return; }
         draft.lines[l.productId] = { presentacion: l.presentacion, cantidad: l.cantidad };
       });
       save();
@@ -3716,14 +3744,15 @@
     var productSection = el('section', { class: 'step card' }, [el('h2', { class: 'step-title' }, [el('span', { class: 'step-num', text: '2' }), '¿Qué lleva?'])]);
     main.appendChild(productSection);
     cat.productos.forEach(function (p) {
-      var line = draft.lines[p.id] || { presentacion: p.precios.CAJA > 0 ? 'CAJA' : 'BULTO', cantidad: 0 };
+      var line = draft.lines[p.id] || { presentacion: p.presentaciones[0].nombre, cantidad: 0 };
+      if (!presDe(p, line.presentacion)) line.presentacion = p.presentaciones[0].nombre;
       var wrap = el('div', { class: 'product' + (line.cantidad > 0 ? ' selected' : '') });
       var qty = el('input', { type: 'number', inputmode: 'numeric', min: '0', step: '1', value: String(line.cantidad || 0), 'aria-label': 'Cantidad de ' + p.nombre });
       var sub = el('div', { class: 'line-total' });
-      var seg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Presentación de ' + p.nombre });
-      ['CAJA', 'BULTO', 'UNIDAD'].forEach(function (pres) {
-        if (!(p.precios[pres] > 0)) return;
-        seg.appendChild(el('button', { type: 'button', 'aria-pressed': String(line.presentacion === pres), text: nice(pres), onclick: function (e) {
+      var seg = el('div', { class: 'chips seg-libre', role: 'group', 'aria-label': 'Presentación de ' + p.nombre });
+      p.presentaciones.forEach(function (x) {
+        var pres = x.nombre;
+        seg.appendChild(el('button', { class: 'chip', type: 'button', 'aria-pressed': String(line.presentacion === pres), text: pres, onclick: function (e) {
           line.presentacion = pres;
           seg.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', String(b === e.currentTarget)); });
           commit();
@@ -3734,8 +3763,9 @@
         line.cantidad = n;
         if (n > 0) draft.lines[p.id] = line; else delete draft.lines[p.id];
         wrap.className = 'product' + (n > 0 ? ' selected' : '');
-        sub.textContent = n > 0 ? n + ' × ' + money(p.precios[line.presentacion]) + ' = ' + money(n * p.precios[line.presentacion]) :
-          money(p.precios[line.presentacion]) + ' por ' + line.presentacion.toLowerCase();
+        var elegida = presDe(p, line.presentacion);
+        sub.textContent = n > 0 ? n + ' × ' + money(elegida.precio) + ' = ' + money(n * elegida.precio) :
+          money(elegida.precio) + ' · trae ' + elegida.unidades;
         save(); updateTotal();
       }
       qty.addEventListener('input', commit);
@@ -3838,7 +3868,8 @@
       return Object.keys(draft.lines).reduce(function (sum, id) {
         var p = productsById[id];
         var l = draft.lines[id];
-        return p ? sum + l.cantidad * (p.precios[l.presentacion] || 0) : sum;
+        var x = p && presDe(p, l.presentacion);
+        return x ? sum + l.cantidad * x.precio : sum;
       }, 0);
     }
     function updateTotal() { if (totalValue) totalValue.textContent = money(computeTotal()); }
@@ -3872,8 +3903,7 @@
       save();
       var medioText = MEDIOS.filter(function (m) { return m[0] === draft.medio; })[0][1];
       function comisionVenta() {
-        if (!lineIds.every(function (id) { return productsById[id].comisiones; })) return [];
-        return [row('Comisión estimada', money(lineIds.reduce(function (s, id) { var l = draft.lines[id]; return s + l.cantidad * Number(productsById[id].comisiones[l.presentacion]); }, 0)))];
+        return [row('Comisión estimada', money(lineIds.reduce(function (s, id) { var l = draft.lines[id]; return s + l.cantidad * Number(presDe(productsById[id], l.presentacion).comision); }, 0)))];
       }
       var saveBtn = btn('Guardar pedido', 'primary', function () {
         setBusy(saveBtn, 'Guardando…');
@@ -3903,7 +3933,7 @@
           row('Cliente', c.nombre), row('Entrega', dayLabel(draft.fecha) + (draft.desde ? ' · ' + draft.desde + ' a ' + (draft.hasta || '') : ''))
         ].concat(lineIds.map(function (id) {
           var l = draft.lines[id], p = productsById[id];
-          return row(qtyText(l.cantidad, l.presentacion) + ' · ' + p.nombre, money(l.cantidad * p.precios[l.presentacion]));
+          return row(qtyText(l.cantidad, l.presentacion) + ' · ' + p.nombre, money(l.cantidad * presDe(p, l.presentacion).precio));
         }), [row('Total', money(total), true)].concat(comisionVenta(), [row('Pagó ahora', paid > 0 ? money(paid) + ' (' + medioText + ')' : 'Nada'),
           row('Queda debiendo', money(Math.max(0, total - (paid || 0))), true)]))),
         err,
@@ -4278,7 +4308,7 @@
       }, function () { /* sin señal: queda lo último conocido */ });
     }
     renderOutbox();
-    go(WEB && !load('minue.guia2', '') ? 'ayuda' : 'inicio');
+    go(WEB && !load('minue.guia3', '') ? 'ayuda' : 'inicio');
     if (outbox().length && navigator.onLine !== false) flushOutbox();
   }
   if (WEB) window.MINUE_START = start; else start();
