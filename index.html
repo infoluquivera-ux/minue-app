@@ -588,6 +588,50 @@
     .tuto-ventajas { gap: 6px; }
     .tuto-ventajas li { padding: 8px 10px; font-size: 15px; line-height: 1.25; }
   }
+
+  /* Pulido visual: una acción dorada por pantalla, menos líneas y jerarquía clara.
+     Títulos > valores > rótulos. Sin recuadros dentro de recuadros. */
+  :root { --r-control: 12px; --h-control: 52px; --c-linea: color-mix(in srgb, var(--c-text) 14%, transparent); }
+  h1 { font-size: 27px; font-weight: 800; margin: var(--sp-1) 0 var(--sp-3); }
+  h2 { font-size: 19px; margin: 28px 0 10px; }
+  .sub { margin-top: -6px; }
+  .card, .list-item, .pill, .parada { border-color: var(--c-linea); box-shadow: none; border-radius: 14px; }
+  .list-item + .list-item { margin-top: var(--sp-2); }
+  .list-item:active, .parada-mover button:active { background: var(--c-sunken); }
+  .list-item strong { font-size: 17px; }
+  .plano { display: block; }
+  .plano .field:first-child { margin-top: var(--sp-3); }
+
+  /* Botones: primario dorado, secundario relleno suave, terciario solo texto */
+  .btn { min-height: var(--h-control); border-width: 1px; border-radius: var(--r-control); font-weight: 700; letter-spacing: -.005em; }
+  .btn.primary { background: var(--c-gold); color: var(--stone-900); border-color: transparent; }
+  .btn.primary:active { background: var(--c-gold); filter: brightness(.93); }
+  .btn.secondary { background: var(--c-sunken); border-color: transparent; }
+  .btn.secondary.strong { border-color: var(--c-linea); }
+  .btn.ghost { min-height: 44px; color: var(--c-muted); text-decoration: none; }
+  .hero-primary { background: var(--c-gold); color: var(--stone-900); min-height: 60px; font-size: 19px; }
+  .hero-primary:active { background: var(--c-gold); filter: brightness(.93); }
+  .btn.hero-sec { border-color: transparent; background: color-mix(in srgb, var(--c-inverse-text) 10%, transparent); min-height: 50px; }
+  .hero { box-shadow: none; }
+
+  /* Campos y selecciones */
+  .field > span, .field-title { font-size: 15px; font-weight: 600; color: var(--c-muted); }
+  .input, select.input, textarea.input { min-height: var(--h-control); border-width: 1px; border-radius: var(--r-control); background: var(--c-sunken); padding: 12px; font-size: 17px; }
+  input.input[type="date"], input.input[type="time"] { min-width: 0; padding: 12px 8px; font-size: 16px; }
+  .search .input { padding-left: 42px; }
+  .chip { min-height: 46px; border-width: 1px; border-radius: var(--r-control); border-color: var(--c-linea); background: transparent; }
+  .chip[aria-pressed="true"] { background: var(--c-accent-soft); color: var(--c-on-accent-soft); border-color: var(--c-accent); }
+  .stepper button, .stepper input { border-width: 1px; border-color: var(--c-linea); background: var(--c-sunken); }
+  .parada-mover button { border-color: transparent; }
+
+  /* Navegación: sin cajas alrededor de los íconos, el activo en dorado */
+  .topbar .icon-btn, .icon-btn { border-color: transparent; background: transparent; }
+  .tab[aria-current="page"] { color: var(--c-progress); }
+  .tab[aria-current="page"] span { box-shadow: none; }
+  .tuto-btn { background: var(--c-gold); color: var(--stone-900); }
+  .tuto-card .tuto-btn { background: var(--c-gold); color: var(--stone-900); }
+  .pasos li.actual .pasos-num { background: var(--c-gold); color: var(--stone-900); border-color: transparent; }
+  .parada-num, .step-num { background: var(--c-sunken); color: var(--c-text); }
 </style>
 
   <style>
@@ -2612,13 +2656,10 @@
     call('productos').then(function (d) {
       clear(main);
       main.appendChild(el('h1', { text: 'Productos' }));
-      main.appendChild(el('div', { class: 'stack' }, [
-        btn('Nuevo producto', 'primary', function () { openProductoForm(null); }, 'plus'),
-        d.productos.length ? btn('Aumentar precios', 'secondary', function () { openAumento(d); }) : null
-      ]));
+      main.appendChild(btn('Nuevo producto', 'primary', function () { openProductoForm(null); }, 'plus'));
       var lista = el('div', { style: 'margin-top:12px' });
       d.productos.forEach(function (p) {
-        var precios = p.presentaciones.map(function (x) { return x.nombre + ' ' + money(x.precio); }).join(' · ');
+        var precios = p.presentaciones.map(function (x) { return (x.nombre + ' ' + money(x.precio)).replace(/ /g, '\u00a0'); }).join(' · ');
         lista.appendChild(el('button', { class: 'list-item prod-fila', type: 'button', onclick: function () { openProducto(p); } }, [
           fotoProducto(p),
           el('div', { class: 'prod-datos' }, [
@@ -2629,6 +2670,7 @@
       });
       if (!d.productos.length) lista.appendChild(el('div', { class: 'card empty' }, [el('strong', { text: 'Todavía no hay productos' }), el('span', { text: 'Tocá Nuevo producto para cargar el primero.' })]));
       main.appendChild(lista);
+      if (d.productos.length) main.appendChild(el('div', { style: 'margin-top:12px' }, [btn('Aumentar precios', 'ghost', function () { openAumento(d); })]));
     }, function (e) { showError(e, renderCatalogo); });
   }
 
@@ -2861,7 +2903,7 @@
           error.hidden = false;
         });
       });
-      main.appendChild(el('div', { class: 'card' }, [
+      main.appendChild(el('div', { class: 'plano' }, [
         el('label', { class: 'field' }, [el('span', { text: 'Dirección de salida' }), direccion]),
         el('label', { class: 'field' }, [el('span', { text: 'Comisión general (%)' }), comision]),
         el('p', { class: 'small', text: 'Se usa en los productos sin comisión propia. Las ventas ya hechas no cambian.' }),
@@ -3424,7 +3466,7 @@
       calcularArmar(!a.manual);
       pintarArmar();
     });
-    var opciones = el('div', { class: 'card' }, [
+    var opciones = el('div', { class: 'plano' }, [
       chipRow([['hoy', 'Hoy'], ['manana', 'Mañana']], cuando, function (v) { renderArmar(todayKey(v === 'hoy' ? 0 : 1)); }, 'Día del recorrido'),
       el('div', { class: 'grid2' }, [el('label', { class: 'field' }, [el('span', { text: 'Día' }), fecha]), el('label', { class: 'field' }, [el('span', { text: 'Salís a las' }), salida])])
     ]);
@@ -4151,7 +4193,7 @@
       });
       main.appendChild(el('button', { class: 'back', type: 'button', onclick: function () { if (prev && existing) renderCliente(existing.clientId); else go('clientes'); } }, [icon('back'), 'Volver']));
       main.appendChild(el('h1', { text: existing ? 'Editar cliente' : 'Nuevo cliente' }));
-      main.appendChild(el('div', { class: 'card' }, [
+      main.appendChild(el('div', { class: 'plano' }, [
         field('nombre', 'Nombre del comercio *', { maxlength: '80' }),
         field('direccion', 'Dirección (calle y número) *', { maxlength: '120', autocomplete: 'off' }),
         el('label', { class: 'field' }, [el('span', { text: 'Localidad *' }), locSelect]), otherLoc,
