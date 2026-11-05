@@ -3091,6 +3091,12 @@
     return 'No pudimos abrir esa foto. Probá con otra.';
   }
 
+  /** Deja anotado cada paso en la base para ver dónde se corta en un teléfono real. */
+  function rastro(texto) {
+    if (!WEB) return;
+    call('diagnostico', { requestId: uuid(), texto: 'foto · ' + texto }).catch(function () { /* nunca molesta al usuario */ });
+  }
+
   function openPerfil() {
     var error = el('div', { class: 'error-box', hidden: true });
     var estado = el('p', { class: 'small', role: 'status', style: 'text-align:center;margin:0 0 8px', hidden: true });
@@ -3115,15 +3121,29 @@
         closeSheet(true);
         toast(dato ? 'Foto actualizada.' : 'Foto quitada.');
       }, function (e) {
+        rastro('fallo al guardar · ' + e.code + ' · ' + e.message);
         fallar(e.code === 'NETWORK' ? 'No hay señal. Quedó arriba para reintentar.' : e.message || 'No se pudo guardar.');
       });
     }
+    elegir.addEventListener('click', function () {
+      store('minue.foto.espera', 1);
+      rastro('toco elegir · ' + navigator.userAgent.slice(0, 120));
+    });
+    archivo.addEventListener('cancel', function () { store('minue.foto.espera', undefined); rastro('cancelo el selector'); });
     archivo.addEventListener('change', function () {
+      store('minue.foto.espera', undefined);
       var elegido = archivo.files[0];
+      rastro('cambio · archivos ' + archivo.files.length + (elegido ? ' · ' + elegido.type + ' · ' + elegido.size + ' bytes' : ''));
       if (!elegido) return;
       error.hidden = true;
       ocupar('Preparando foto…');
-      recortarFoto(elegido).then(guardar, function (e) { fallar(errorDeFoto(elegido, e)); }).then(function () { archivo.value = ''; });
+      recortarFoto(elegido).then(function (dato) {
+        rastro('foto lista · ' + dato.length + ' · ' + dato.slice(0, 24));
+        guardar(dato);
+      }, function (e) {
+        rastro('fallo al abrir · ' + (e && e.name) + ' · ' + (e && e.message));
+        fallar(errorDeFoto(elegido, e));
+      }).then(function () { archivo.value = ''; });
     });
     openSheet([el('h2', { text: 'Tu foto' }), el('div', { class: 'perfil-grande' }, [avatar('xl')]),
       el('p', { class: 'small', style: 'text-align:center', text: capital(S.nombre || '') }), estado, error,
@@ -4556,6 +4576,7 @@
     if (WEB) {
       S.rol = load('minue.rol', '');
       S.foto = load('minue.foto', '');
+      if (load('minue.foto.espera', 0)) { store('minue.foto.espera', undefined); rastro('la app se recargo despues de abrir el selector'); }
       document.getElementById('perfil').hidden = false;
       pintarAvatar(document.getElementById('perfil-avatar'));
       document.getElementById('perfil').addEventListener('click', function () { closeDrawer(); openPerfil(); });
