@@ -413,6 +413,31 @@
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; animation-delay: 0s !important; }
     .check-circle, .check-tick { stroke-dashoffset: 0; }
   }
+
+  /* Armar recorrido */
+  .mapa { height: 260px; margin: 12px 0; border: 1px solid var(--c-border); border-radius: 14px; overflow: hidden; background: var(--c-sunken); position: relative; isolation: isolate; }
+  .mapa-aviso { margin: 0; padding: 24px 16px; text-align: center; }
+  .leaflet-marker-icon.pin { display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--c-action); color: var(--c-on-action); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); font: 800 14px/1 var(--font, system-ui, sans-serif); }
+  .leaflet-marker-icon.pin.base { background: var(--c-progress); }
+  .leaflet-marker-icon.pin.tarde { background: var(--c-danger); }
+  .plan-resumen { margin-top: 14px; }
+  .plan-datos { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; color: var(--c-inverse-muted); font-weight: 600; }
+  .plan-acceso { margin: 10px 0 2px; }
+  .plan-acceso .small { margin: 0 0 4px; }
+  .field-title { display: block; font-weight: 700; margin: 14px 0 6px; }
+  .parada { display: grid; grid-template-columns: 32px minmax(0, 1fr) 44px; gap: 10px; align-items: start; padding: 12px; margin-bottom: 8px; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 14px; }
+  .parada-num { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--c-action); color: var(--c-on-action); font-weight: 800; }
+  .parada-num.tarde { background: var(--c-danger); }
+  .parada-texto { min-width: 0; overflow-wrap: anywhere; }
+  .parada-hora { font-weight: 700; margin-top: 4px; }
+  .parada-acciones { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .parada-mover { display: flex; flex-direction: column; gap: 6px; }
+  .parada-mover button { width: 44px; height: 44px; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-sunken); color: var(--c-text); font-size: 20px; font-weight: 700; }
+  .parada-mover button:disabled { opacity: .35; }
+  .armar-fin { margin-top: 20px; }
+  .card h3 { margin: 18px 0 4px; font-size: 1rem; }
+  .card .grid2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .card .grid2 .input { min-width: 0; width: 100%; }
 </style>
 
   <style>
@@ -482,6 +507,7 @@
     </div>
     <nav class="drawer-nav" aria-label="Secciones del menú">
       <button type="button" class="drawer-item" data-go="inicio" aria-label="Hoy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Hoy</span></button>
+      <button type="button" class="drawer-item" data-go="armar" aria-label="Armar recorrido"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/></svg><span>Armar recorrido</span></button>
       <button type="button" class="drawer-item" data-go="pedidos" aria-label="Pedidos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg><span>Pedidos</span></button>
       <button type="button" class="drawer-item" data-go="clientes" aria-label="Clientes"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg><span>Clientes</span></button>
       <button type="button" class="drawer-item" data-go="cobros" aria-label="Plata"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg><span>Plata</span></button>
@@ -599,16 +625,21 @@
     var today = datos.hoy;
     var base = datos.base || {};
     var from = datos.desde && typeof datos.desde.lat === 'number' ? datos.desde : base;
-    var stops = (datos.pendientes || []).map(function (s) {
+    var stops = (datos.pendientes || []).concat((datos.visitas || []).map(function (v) {
+      return Object.assign({ tipo: 'visita', orderId: 'visita-' + v.paradaId, prioridad: 'NORMAL', estado: 'PENDIENTE', total: 0, saldo: 0, comision: 0, fecha: today, atrasado: false }, v);
+    })).map(function (s) {
       s.rank = RANK.hasOwnProperty(s.prioridad) ? RANK[s.prioridad] : 2;
       return s;
     });
 
-    var ordered = [];
+    // Con un plan guardado manda su orden; lo que se agregó después va a continuación.
+    var ordered = stops.filter(function (s) { return s.ordenPlan != null && s.orderId !== datos.elegida; })
+      .sort(function (a, b) { return a.ordenPlan - b.ordenPlan; });
     var pinned = stops.filter(function (s) { return s.orderId === datos.elegida; })[0];
-    if (pinned) ordered.push(pinned);
-    var rest = stops.filter(function (s) { return s !== pinned; });
-    var cursor = pinned && pinned.lat !== null ? pinned : from;
+    if (pinned) ordered.unshift(pinned);
+    var rest = stops.filter(function (s) { return s !== pinned && s.ordenPlan == null; });
+    var ultima = ordered[ordered.length - 1];
+    var cursor = ultima && ultima.lat !== null ? ultima : from;
     var clock = nowMin + (pinned ? travelMin(from, pinned) + SERVICE_MIN : 0);
 
     [0, 1, 2].forEach(function (rank) {
@@ -645,7 +676,8 @@
         localidad: s.localidad, direccionCompleta: s.direccionCompleta, desde: s.desde, hasta: s.hasta, fecha: s.fecha,
         atrasado: s.atrasado, prioridad: s.prioridad, estado: s.estado, total: s.total, saldo: s.saldo, comision: s.comision, recibe: s.recibe,
         observaciones: s.observaciones, instrucciones: s.instrucciones, telefono: s.telefono, whatsapp: s.whatsapp,
-        elegida: s.orderId === datos.elegida, sinUbicacion: s.lat === null, aviso: warning, mapsUrl: directions(s.direccionCompleta)
+        elegida: s.orderId === datos.elegida, sinUbicacion: s.lat === null, aviso: s.motivo || warning, mapsUrl: directions(s.direccionCompleta),
+        tipo: s.tipo || 'pedido', paradaId: s.paradaId, llegada: s.llegada || '', horarioFijo: !!s.horarioFijo
       };
     });
 
@@ -653,6 +685,7 @@
     return {
       hoy: today,
       started: !!datos.started,
+      plan: datos.plan || null,
       stops: publicStops,
       restantes: publicStops.length,
       ocultas: Math.max(0, ordered.length - visible.length),
@@ -667,13 +700,184 @@
     };
   }
 
+  /* ---------- Armar el recorrido: orden sugerido con horarios y regreso ---------- */
+
+  function hora(minutos) {
+    var m = Math.round(minutos) % 1440;
+    return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2);
+  }
+
+  function tiempoRecto(a, b) {
+    if (a.lat == null || b.lat == null) return { min: 0, km: 0 };
+    var km = haversineKm(a, b) * ROAD_FACTOR;
+    return { min: km / AVG_KMH * 60, km: km };
+  }
+
+  /** Recorre una secuencia y devuelve horarios, esperas y demoras. */
+  function evaluar(seq, o) {
+    var t = o.salida;
+    var km = 0;
+    var tarde = 0;
+    var cuantas = 0;
+    var prev = o.inicio;
+    var detalle = seq.map(function (s) {
+      var tramo = o.tiempo(prev, s);
+      t += tramo.min;
+      km += tramo.km;
+      var llegada = t;
+      var desde = s.fijo ? toMinutes(s.desde) : null;
+      var hasta = s.fijo ? toMinutes(s.hasta) : null;
+      var espera = desde !== null && t < desde ? desde - t : 0;
+      t += espera;
+      var demora = hasta !== null && llegada > hasta ? llegada - hasta : 0;
+      if (demora > 0) { cuantas++; tarde += demora; }
+      t += s.minutos;
+      prev = s;
+      return { parada: s, llegada: llegada, espera: espera, tarde: demora, tramoMin: tramo.min, tramoKm: tramo.km };
+    });
+    var regreso = t;
+    if (o.fin) {
+      var vuelta = o.tiempo(prev, o.fin);
+      regreso += vuelta.min;
+      km += vuelta.km;
+    }
+    // Primero cumplir los horarios fijos, después la menor demora y por último terminar antes.
+    return { detalle: detalle, km: km, regreso: regreso, tarde: tarde, cuantas: cuantas,
+      puntaje: cuantas * 1e9 + tarde * 1e5 + (regreso - o.salida) * 100 + km };
+  }
+
+  function colocar(libres, fijas, total) {
+    var seq = [];
+    var i = 0;
+    for (var p = 0; p < total; p++) seq.push(fijas[p] || libres[i++]);
+    return seq;
+  }
+
+  function exhaustivo(libres, medir) {
+    var mejor = null;
+    var mejorPuntaje = Infinity;
+    var a = libres.slice();
+    (function permutar(k) {
+      if (k === a.length) {
+        var v = medir(a);
+        if (v < mejorPuntaje) { mejorPuntaje = v; mejor = a.slice(); }
+        return;
+      }
+      for (var i = k; i < a.length; i++) {
+        var t = a[k]; a[k] = a[i]; a[i] = t;
+        permutar(k + 1);
+        t = a[k]; a[k] = a[i]; a[i] = t;
+      }
+    })(0);
+    return mejor;
+  }
+
+  function mejorar(inicial, medir) {
+    var seq = inicial.slice();
+    var mejor = medir(seq);
+    var cambio = true;
+    var vueltas = 0;
+    while (cambio && vueltas++ < 60) {
+      cambio = false;
+      for (var a = 0; a < seq.length - 1; a++) {
+        for (var b = a + 1; b < seq.length; b++) {
+          var inv = seq.slice(0, a).concat(seq.slice(a, b + 1).reverse(), seq.slice(b + 1));
+          var v = medir(inv);
+          if (v + 1e-6 < mejor) { mejor = v; seq = inv; cambio = true; }
+        }
+      }
+      for (var largo = 1; largo <= 3; largo++) {
+        for (var i = 0; i + largo <= seq.length; i++) {
+          var tramo = seq.slice(i, i + largo);
+          var resto = seq.slice(0, i).concat(seq.slice(i + largo));
+          for (var j = 0; j <= resto.length; j++) {
+            if (j === i) continue;
+            var mov = resto.slice(0, j).concat(tramo, resto.slice(j));
+            var w = medir(mov);
+            if (w + 1e-6 < mejor) { mejor = w; seq = mov; cambio = true; break; }
+          }
+          if (cambio) break;
+        }
+        if (cambio) break;
+      }
+    }
+    return { seq: seq, puntaje: mejor };
+  }
+
+  /** Vecino más cercano desde un arranque dado, para empezar a mejorar. */
+  function cercano(libres, desde, tiempo) {
+    var resto = libres.slice();
+    var seq = [];
+    var actual = desde;
+    while (resto.length) {
+      var mejor = 0;
+      for (var i = 1; i < resto.length; i++) if (tiempo(actual, resto[i]).min < tiempo(actual, resto[mejor]).min) mejor = i;
+      actual = resto.splice(mejor, 1)[0];
+      seq.push(actual);
+    }
+    return seq;
+  }
+
+  function heuristico(libres, medir, o) {
+    var porHorario = libres.slice().sort(function (a, b) {
+      return (a.fijo ? toMinutes(a.hasta) || 1440 : 1500) - (b.fijo ? toMinutes(b.hasta) || 1440 : 1500);
+    });
+    var arranques = [porHorario, cercano(libres, o.inicio, o.tiempo)];
+    if (o.fin) arranques.push(cercano(libres, o.fin, o.tiempo).reverse());
+    libres.slice(0, 6).forEach(function (s) {
+      arranques.push([s].concat(cercano(libres.filter(function (x) { return x !== s; }), s, o.tiempo)));
+    });
+    return arranques.reduce(function (mejor, inicio) {
+      var r = mejorar(inicio, medir);
+      return !mejor || r.puntaje < mejor.puntaje ? r : mejor;
+    }, null).seq;
+  }
+
+  /**
+   * o: { inicio, fin (o null), salida (minutos), paradas: [{ id, lat, lng, minutos, fijo, desde, hasta, posicion }], tiempo (opcional) }.
+   * "posicion" deja una parada fija en ese lugar. Las paradas sin ubicación quedan al final, avisadas.
+   */
+  function planificar(o) {
+    o = Object.assign({ tiempo: tiempoRecto }, o);
+    var ubicadas = o.paradas.filter(function (s) { return s.lat != null && s.lng != null; });
+    var sinUbicar = o.paradas.filter(function (s) { return ubicadas.indexOf(s) === -1; });
+    var fijas = {};
+    ubicadas.forEach(function (s) {
+      if (s.posicion !== null && s.posicion !== undefined) fijas[Math.min(s.posicion, ubicadas.length - 1)] = s;
+    });
+    var libres = ubicadas.filter(function (s) { return Object.keys(fijas).every(function (p) { return fijas[p] !== s; }); });
+    function medir(l) { return evaluar(colocar(l, fijas, ubicadas.length), o).puntaje; }
+    var elegido = libres.length <= 8 && !o.rapido ? exhaustivo(libres, medir) : heuristico(libres, medir, o);
+    var final = evaluar(colocar(elegido || [], fijas, ubicadas.length), o);
+    var manual = evaluar(ubicadas, o);
+    var paradas = final.detalle.map(function (d, i) {
+      var s = d.parada;
+      var motivo = '';
+      if (d.tarde > 0) motivo = 'Llegás ' + Math.ceil(d.tarde) + ' min tarde: el horario termina ' + s.hasta;
+      else if (d.espera > 1) motivo = 'Llegás ' + hora(d.llegada) + ', abre ' + s.desde;
+      else if (s.fijo) motivo = 'Horario fijo de ' + s.desde + ' a ' + s.hasta;
+      return { orden: i + 1, parada: s, llegada: hora(d.llegada + d.espera), tramoMin: Math.round(d.tramoMin), tramoKm: Math.round(d.tramoKm * 10) / 10,
+        tarde: Math.ceil(d.tarde), espera: Math.round(d.espera), motivo: motivo };
+    });
+    return {
+      paradas: paradas,
+      sinUbicar: sinUbicar,
+      km: Math.round(final.km * 10) / 10,
+      regreso: hora(final.regreso),
+      regresoMin: Math.round(final.regreso),
+      duracionMin: Math.round(final.regreso - o.salida),
+      demoradas: final.cuantas,
+      ahorroMin: Math.max(0, Math.round(manual.regreso - final.regreso))
+    };
+  }
+
   /** Minutos del día en Argentina, sin importar la zona del teléfono. */
   function nowMinutes(date) {
     var text = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', hour12: false }).format(date || new Date());
     return (toMinutes(text) || 0) % 1440;
   }
 
-  var api = { build: build, nowMinutes: nowMinutes, haversineKm: haversineKm };
+  var api = { build: build, nowMinutes: nowMinutes, haversineKm: haversineKm, planificar: planificar, hora: hora, toMinutes: toMinutes, tiempoRecto: tiempoRecto };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.MINUE_RUTA = api;
 })(this);
@@ -1249,7 +1453,7 @@
     });
     window.scrollTo(0, 0);
     setFab(true);
-    ({ inicio: renderHoy, recorrido: renderHoy, pedidos: renderPedidos, clientes: renderClientes, cobros: renderCobros, ajustes: renderAjustes, catalogo: renderCatalogo, panel: renderPanel }[tab])();
+    ({ inicio: renderHoy, recorrido: renderHoy, pedidos: renderPedidos, clientes: renderClientes, cobros: renderCobros, ajustes: renderAjustes, catalogo: renderCatalogo, panel: renderPanel, armar: renderArmar }[tab])();
   }
 
   function refresh() {
@@ -1366,12 +1570,18 @@
     }
     if (d.atrasadas > 0) main.appendChild(el('p', { class: 'late-line', text: d.atrasadas + (d.atrasadas === 1 ? ' entrega atrasada' : ' entregas atrasadas') }));
     main.appendChild(el('div', { class: 'pills' }, [pill('Cobrado hoy', money(d.cobradoHoy)), pill('Te deben en la ruta', money(r.aCobrar))]));
+    var resumen = r.plan && r.plan.resumen && r.plan.resumen.regreso
+      ? 'Salida ' + r.plan.salida + ' · volvés ' + r.plan.resumen.regreso + ' · ' + String(r.plan.resumen.km).replace('.', ',') + ' km (aproximado)' : '';
+    main.appendChild(el('div', { class: 'plan-acceso' }, [
+      resumen ? el('p', { class: 'small', text: resumen }) : null,
+      btn(r.plan ? 'Cambiar el recorrido' : 'Armar el recorrido', 'ghost', function () { go('armar'); }, 'route')
+    ]));
 
     if (!r.stops.length) {
       main.appendChild(el('div', { class: 'card empty' }, [
         done ? checkMark() : null,
         el('strong', { text: done ? 'Listo por hoy' : 'No hay entregas pendientes' }),
-        el('span', { text: done ? 'Entregaste ' + done + ' y cobraste ' + money(d.cobradoHoy) + '.' : 'Cuando cargues un pedido para hoy, aparece acá.' })
+        el('span', { text: done ? 'Entregaste ' + done + ' y cobraste ' + money(d.cobradoHoy) + '.' : 'Cuando cargues un pedido para hoy o armes el recorrido, aparece acá.' })
       ]));
       if (done) {
         main.appendChild(el('div', { class: 'stack', style: 'margin-top:12px' }, [
@@ -1404,7 +1614,7 @@
     main.appendChild(el('div', { class: 'stack' }, [
       linkBtn(r.volverBaseUrl, 'Volver a la base', 'secondary', 'home'),
       linkBtn(r.recorridoCompletoUrl, 'Ver todo el recorrido en Maps', 'ghost', 'route'),
-      el('p', { class: 'small', text: r.explicacion + (r.modo !== 'aproximado' ? ' Algunas direcciones no se ubicaron en el mapa: van al final.' : '') }),
+      el('p', { class: 'small', text: (r.plan ? 'Seguís el orden que guardaste. Las horas son aproximadas: no tienen en cuenta el tránsito.' : r.explicacion) + (r.modo !== 'aproximado' ? ' Algunas direcciones no se ubicaron en el mapa: van al final.' : '') }),
       el('p', { class: 'small', text: 'En el celular, Maps puede mostrar pocas paradas juntas. Lo más seguro es ir con Maps parada por parada.' })
     ]));
   }
@@ -1415,14 +1625,16 @@
     var card = el('article', { class: 'hero', 'aria-label': 'Siguiente parada: ' + s.cliente });
     card.appendChild(el('div', { class: 'hero-top' }, [
       el('span', { class: 'hero-kicker', text: 'Siguiente · parada 1 de ' + (r.restantes + r.ocultas) }),
+      s.tipo === 'visita' ? el('span', { class: 'hchip', text: 'Visita' }) : null,
       s.atrasado ? el('span', { class: 'hchip late', text: 'Atrasada · ' + dayLabel(s.fecha) }) : null,
       s.prioridad && s.prioridad !== 'NORMAL' ? el('span', { class: 'hchip', text: nice(s.prioridad) }) : null
     ]));
     card.appendChild(el('h2', { class: 'hero-name', text: s.cliente }));
     card.appendChild(el('p', { class: 'hero-addr', text: s.direccion + ' · ' + nice(s.localidad) }));
     card.appendChild(el('dl', { class: 'hero-info' }, [
-      el('dt', { text: 'Horario' }), el('dd', { text: hours(s) }),
-      el('dt', { text: 'Cobrar' }), el('dd', { class: 'money', text: s.saldo > 0 ? money(s.saldo) : 'Ya pagó' }),
+      s.llegada ? el('dt', { text: 'Llegás' }) : null, s.llegada ? el('dd', { text: s.llegada }) : null,
+      el('dt', { text: 'Horario' }), el('dd', { text: hours(s) + (s.horarioFijo ? ' · fijo' : '') }),
+      s.tipo === 'visita' ? null : el('dt', { text: 'Cobrar' }), s.tipo === 'visita' ? null : el('dd', { class: 'money', text: s.saldo > 0 ? money(s.saldo) : 'Ya pagó' }),
       s.recibe ? el('dt', { text: 'Recibe' }) : null, s.recibe ? el('dd', { text: s.recibe }) : null
     ]));
     var notes = [s.instrucciones, s.observaciones && s.observaciones !== 'NADA' ? s.observaciones : ''].filter(Boolean).join(' · ');
@@ -1430,6 +1642,16 @@
     if (s.aviso) card.appendChild(el('div', { class: 'note', text: s.aviso }));
     if (s.sinUbicacion) card.appendChild(el('div', { class: 'note', text: 'No pudimos ubicar esta dirección en el mapa. Revisala en Maps.' }));
 
+    if (s.tipo === 'visita') {
+      card.appendChild(el('a', { class: 'btn hero-primary', href: s.mapsUrl, target: '_blank', rel: 'noopener' }, [icon('map'), 'Ir con Maps']));
+      card.appendChild(btn('Cargar pedido', 'hero-sec', function () { openNuevoPedido(s.clientId, s.paradaId); }, 'plus'));
+      var acciones = [];
+      if (s.telefono) acciones.push(linkBtn('tel:' + s.telefono, 'Llamar', 'hero-sec tile', 'phone'));
+      if (s.whatsapp) acciones.push(linkBtn(s.whatsapp, 'Avisar', 'hero-sec tile', 'chat'));
+      acciones.push(btn('Sin pedido', 'hero-sec tile', function () { openVisita(s); }, 'back'));
+      card.appendChild(el('div', { class: 'hero-tiles' }, acciones));
+      return card;
+    }
     if (!enroute) {
       card.appendChild(el('a', { class: 'btn hero-primary', href: s.mapsUrl, target: '_blank', rel: 'noopener', onclick: function () {
         enrutaSet(s.orderId);
@@ -1454,11 +1676,25 @@
       el('div', {}, [
         el('strong', { text: s.cliente }),
         el('div', { class: 'small', text: s.direccion + ' · ' + nice(s.localidad) }),
+        s.llegada ? el('div', { class: 'small', text: 'Llegás ' + s.llegada + (s.horarioFijo ? ' · horario fijo' : '') }) : null,
         s.atrasado ? el('div', { class: 'small late-text', text: 'Atrasada · ' + dayLabel(s.fecha) }) : null
       ]),
-      el('span', { class: s.saldo > 0 ? 'owe' : 'paid', text: s.saldo > 0 ? money(s.saldo) : 'Pagado' })
+      s.tipo === 'visita' ? el('span', { class: 'small', text: 'Visita' }) : el('span', { class: s.saldo > 0 ? 'owe' : 'paid', text: s.saldo > 0 ? money(s.saldo) : 'Pagado' })
     ]);
     var body = el('div', { class: 'after-body', hidden: true });
+    if (s.tipo === 'visita') {
+      body.appendChild(el('div', { class: 'btn-row' }, [
+        linkBtn(s.mapsUrl, 'Ir con Maps', 'secondary', 'map'),
+        btn('Cargar pedido', 'secondary strong', function () { openNuevoPedido(s.clientId, s.paradaId); }, 'plus')
+      ]));
+      body.appendChild(btn('Sin pedido', 'ghost', function () { openVisita(s); }));
+      head.addEventListener('click', function () {
+        var abierto = body.hidden;
+        body.hidden = !abierto;
+        head.setAttribute('aria-expanded', String(abierto));
+      });
+      return el('div', { class: 'after' }, [head, body]);
+    }
     var first = btn(s.elegida ? 'Quitar "ir primero"' : 'Ir primero a esta parada', 'secondary', function (e) {
       priorizar(s.elegida ? '' : s.orderId, e.currentTarget, s.cliente);
     }, 'star');
@@ -1478,6 +1714,27 @@
       head.setAttribute('aria-expanded', String(open));
     });
     return el('div', { class: 'after' }, [head, body]);
+  }
+
+  /** Cierra una visita que no terminó en pedido, dejando anotado qué pasó. */
+  function openVisita(s) {
+    var requestId = uuid();
+    var error = el('div', { class: 'error-box', hidden: true });
+    var opciones = el('div', { class: 'stack' });
+    ['No necesitó', 'Estaba cerrado', 'Vuelvo otro día'].forEach(function (texto) {
+      var b = btn(texto, 'secondary', function () {
+        setBusy(b, 'Guardando…');
+        write('visitaHecha', { requestId: requestId, paradaId: s.paradaId, resultado: texto }, 'Visita a ' + s.cliente).then(function () {
+          afterFix('Visita anotada.');
+        }, function (e) {
+          unsetBusy(b);
+          error.textContent = e.code === 'NETWORK' ? 'No hay señal. Quedó arriba para reintentar.' : e.message || 'No se pudo guardar.';
+          error.hidden = false;
+        });
+      });
+      opciones.appendChild(b);
+    });
+    openSheet([el('h2', { text: s.cliente }), el('p', { class: 'small', text: '¿Qué pasó?' }), error, opciones], 'Resultado de la visita');
   }
 
   function priorizar(orderId, button, name) {
@@ -1896,7 +2153,7 @@
   }
 
   function openEditarPedido(p) {
-    var f = { fecha: p.fecha, desde: p.desde, hasta: p.hasta, prioridad: p.prioridad };
+    var f = { fecha: p.fecha, desde: p.desde, hasta: p.hasta, prioridad: p.prioridad, fijo: !!p.horarioFijo };
     var cantidades = {};
     var total = el('strong', { text: money(p.total) });
     var error = el('div', { class: 'error-box', hidden: true });
@@ -1936,11 +2193,17 @@
       prioridadBox.appendChild(chipRow([['NORMAL', 'Normal'], ['URGENTE', 'Urgente'], ['CRÍTICA', 'Crítica']], f.prioridad, function (v) { f.prioridad = v; drawPrioridad(); }, 'Prioridad'));
     }
     drawPrioridad();
+    var fijoBox = el('div');
+    function drawFijo() {
+      clear(fijoBox);
+      fijoBox.appendChild(chipRow([[false, 'Horario libre'], [true, 'Horario fijo']], f.fijo, function (v) { f.fijo = v; drawFijo(); }, 'Tipo de horario'));
+    }
+    drawFijo();
 
     var save = el('button', { class: 'btn primary', type: 'button', text: 'Guardar cambios' });
     save.addEventListener('click', function () {
       setBusy(save, 'Guardando…');
-      write('editarPedido', { requestId: requestId, orderId: p.orderId, rev: p.rev, fecha: fecha.value, desde: desde.value, hasta: hasta.value,
+      write('editarPedido', { requestId: requestId, orderId: p.orderId, rev: p.rev, fecha: fecha.value, desde: desde.value, hasta: hasta.value, horarioFijo: f.fijo,
         prioridad: f.prioridad, recibe: recibe.value, observaciones: obs.value,
         lineas: p.lineas.map(function (l) { return { id: l.id, cantidad: cantidades[l.id] }; }) }, 'Editar pedido de ' + p.cliente).then(function () {
         afterFix('Pedido actualizado.');
@@ -2286,12 +2549,21 @@
       main.appendChild(el('h1', { text: 'Ajustes' }));
       var direccion = el('input', { class: 'input', maxlength: '160', value: a.direccionBase, 'aria-label': 'Dirección de salida' });
       var comision = el('input', { class: 'input', inputmode: 'decimal', value: String(a.comision).replace('.', ','), 'aria-label': 'Comisión general en porcentaje' });
+      var salida = el('input', { class: 'input', type: 'time', value: a.salida, 'aria-label': 'Hora de salida' });
+      var minutos = el('input', { class: 'input', inputmode: 'numeric', value: String(a.minutos), 'aria-label': 'Minutos en cada local' });
+      var aj = { volver: a.volver };
+      var volverBox = el('div');
+      function drawVolver() {
+        clear(volverBox);
+        volverBox.appendChild(chipRow([[true, 'Vuelvo a la base'], [false, 'Termino en la última']], aj.volver, function (v) { aj.volver = v; drawVolver(); }, 'Al terminar el recorrido'));
+      }
+      drawVolver();
       var error = el('div', { class: 'error-box', hidden: true });
       var save = el('button', { class: 'btn primary', type: 'button', text: 'Guardar ajustes' });
       save.addEventListener('click', function () {
         error.hidden = true;
         setBusy(save, 'Guardando…');
-        write('guardarAjustes', { direccionBase: direccion.value, comision: comision.value }, 'Guardar ajustes').then(function () {
+        write('guardarAjustes', { direccionBase: direccion.value, comision: comision.value, salida: salida.value, minutos: minutos.value, volver: aj.volver }, 'Guardar ajustes').then(function () {
           unsetBusy(save);
           toast('Ajustes guardados.');
         }, function (e) {
@@ -2304,7 +2576,13 @@
         el('label', { class: 'field' }, [el('span', { text: 'Dirección de salida' }), direccion]),
         el('label', { class: 'field' }, [el('span', { text: 'Comisión general (%)' }), comision]),
         el('p', { class: 'small', text: 'Se usa en los productos sin comisión propia. Las ventas ya hechas no cambian.' }),
-        error, save
+        el('h3', { text: 'Recorrido' }),
+        el('div', { class: 'grid2' }, [el('label', { class: 'field' }, [el('span', { text: 'Hora de salida' }), salida]), el('label', { class: 'field' }, [el('span', { text: 'Minutos por local' }), minutos])]),
+        volverBox,
+        error, save,
+        el('div', { style: 'margin-top:10px' }, [btn(a.baseLat != null ? 'Corregir el punto de salida' : 'Marcar el punto de salida', 'secondary', function () {
+          openUbicar({ base: true, titulo: 'Salida', direccion: direccion.value, lat: a.baseLat, lng: a.baseLng, onSaved: function () { renderAjustes(); } });
+        }, 'map')])
       ]));
       main.appendChild(el('h2', { text: 'Descargar en Excel' }));
       var zona = el('div', { class: 'stack' });
@@ -2324,6 +2602,494 @@
     }, function (e) { showError(e, renderAjustes); });
   }
 
+  /* ---------------- Mapa y ubicaciones ---------------- */
+
+  var mapaCargando = null;
+
+  /** El mapa se baja solo cuando hace falta: la app sigue liviana y funciona sin él. */
+  function cargarMapa() {
+    if (window.L) return Promise.resolve(window.L);
+    if (!mapaCargando) {
+      mapaCargando = new Promise(function (ok, mal) {
+        var css = document.createElement('link');
+        css.rel = 'stylesheet';
+        css.href = 'leaflet/leaflet.css';
+        document.head.appendChild(css);
+        var js = document.createElement('script');
+        js.src = 'leaflet/leaflet.js';
+        js.onload = function () { ok(window.L); };
+        js.onerror = function () { mapaCargando = null; mal(new Error('sin mapa')); };
+        document.head.appendChild(js);
+      });
+    }
+    return mapaCargando;
+  }
+
+  function crearMapa(caja, L) {
+    var mapa = L.map(caja, { scrollWheelZoom: false });
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+    }).addTo(mapa);
+    return mapa;
+  }
+
+  function pinMapa(L, texto, clase) {
+    return L.divIcon({ className: 'pin' + (clase ? ' ' + clase : ''), html: '<span>' + texto + '</span>', iconSize: [32, 32], iconAnchor: [16, 16] });
+  }
+
+  function miUbicacion() {
+    return new Promise(function (ok, mal) {
+      if (!navigator.geolocation) { mal(new Error('Este teléfono no permite leer la ubicación.')); return; }
+      navigator.geolocation.getCurrentPosition(function (p) {
+        ok({ lat: p.coords.latitude, lng: p.coords.longitude, precision: p.coords.accuracy });
+      }, function () {
+        mal(new Error('No pudimos leer la ubicación. Revisá que esté activada y permitida para esta app.'));
+      }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
+    });
+  }
+
+  /** Marca dónde queda un local o el punto de salida: GPS, buscando la dirección o tocando el mapa. */
+  function openUbicar(o) {
+    var punto = o.lat != null && o.lng != null ? { lat: o.lat, lng: o.lng } : null;
+    var mapa = null;
+    var marca = null;
+    var L = null;
+    var requestId = uuid();
+    var caja = el('div', { class: 'mapa', role: 'application', 'aria-label': 'Mapa para marcar la ubicación' });
+    var estado = el('p', { class: 'small', 'aria-live': 'polite', text: punto ? 'Ubicación guardada. Tocá el mapa para corregirla.' : 'Todavía sin marcar.' });
+    var error = el('div', { class: 'error-box', hidden: true });
+    var save = el('button', { class: 'btn primary', type: 'button', text: 'Guardar ubicación' });
+    save.disabled = !punto;
+
+    function marcar(p, mensaje) {
+      punto = { lat: p.lat, lng: p.lng };
+      save.disabled = false;
+      estado.textContent = mensaje;
+      if (!mapa) return;
+      if (marca) marca.setLatLng(punto);
+      else marca = L.marker(punto, { icon: pinMapa(L, '•', 'base') }).addTo(mapa);
+      mapa.setView(punto, Math.max(mapa.getZoom() || 0, 16));
+    }
+
+    function aviso(texto) {
+      error.textContent = texto;
+      error.hidden = false;
+    }
+
+    var gps = btn('Estoy acá ahora', 'secondary', function () {
+      error.hidden = true;
+      setBusy(gps, 'Buscando…');
+      miUbicacion().then(function (p) {
+        unsetBusy(gps);
+        marcar(p, p.precision > 100 ? 'Marcado, pero el GPS es poco preciso (' + Math.round(p.precision) + ' m). Revisá el punto.' : 'Marcado donde estás.');
+      }, function (e) { unsetBusy(gps); aviso(e.message); });
+    }, 'map');
+
+    var buscar = btn('Buscar la dirección', 'ghost', function () {
+      error.hidden = true;
+      setBusy(buscar, 'Buscando…');
+      fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ar&q=' + encodeURIComponent(o.direccion || '')).then(function (r) {
+        if (!r.ok) throw new Error('falló');
+        return r.json();
+      }).then(function (lista) {
+        unsetBusy(buscar);
+        if (!lista.length) { aviso('No encontramos esa dirección. Marcala tocando el mapa.'); return; }
+        marcar({ lat: Number(lista[0].lat), lng: Number(lista[0].lon) }, 'Encontrada. Revisá que el punto esté bien y corregilo tocando el mapa.');
+      }, function () { unsetBusy(buscar); aviso('No pudimos buscar la dirección. Probá con "Estoy acá ahora".'); });
+    });
+
+    save.addEventListener('click', function () {
+      error.hidden = true;
+      setBusy(save, 'Guardando…');
+      write('guardarUbicacion', { requestId: requestId, clientId: o.clientId || '', base: !!o.base, lat: punto.lat, lng: punto.lng }, 'Ubicación de ' + o.titulo).then(function () {
+        closeSheet(true);
+        toast('Ubicación guardada.');
+        if (o.onSaved) o.onSaved(punto);
+      }, function (e) {
+        unsetBusy(save);
+        aviso(e.code === 'NETWORK' ? 'No hay señal. Quedó arriba para reintentar.' : e.message || 'No se pudo guardar.');
+      });
+    });
+
+    openSheet([el('h2', { text: 'Ubicación' }), el('p', { class: 'small', text: o.titulo + (o.direccion ? ' · ' + o.direccion : '') }),
+      caja, estado, error, el('div', { class: 'stack' }, [gps, buscar, save])], 'Marcar la ubicación');
+
+    cargarMapa().then(function (lib) {
+      L = lib;
+      mapa = crearMapa(caja, L);
+      var inicio = punto || (o.cerca && o.cerca.lat != null ? o.cerca : { lat: -34.66, lng: -58.37 });
+      mapa.setView(inicio, punto ? 16 : 13);
+      if (punto) marca = L.marker(punto, { icon: pinMapa(L, '•', 'base') }).addTo(mapa);
+      mapa.on('click', function (e) { marcar(e.latlng, 'Marcado en el mapa.'); });
+      setTimeout(function () { mapa.invalidateSize(); }, 250);
+    }, function () {
+      caja.hidden = true;
+      estado.textContent = 'El mapa no se pudo abrir. Con "Estoy acá ahora" podés guardar la ubicación igual.';
+    });
+  }
+
+  /* ---------------- Armar el recorrido ---------------- */
+
+  function renderArmar(fecha) {
+    var dia = fecha || todayKey();
+    S.current = function () { if (S.armar && S.armar.fecha === dia) pintarArmar(); else renderArmar(dia); };
+    S.armar = null;
+    setFab(false);
+    var id = ++S.renderId;
+    loading();
+    call('armarRecorrido', { fecha: dia }).then(function (d) {
+      if (id !== S.renderId) return;
+      S.armar = estadoArmar(d);
+      calcularArmar(!S.armar.manual);
+      pintarArmar();
+    }, function (e) { showError(e, function () { renderArmar(dia); }); });
+  }
+
+  function paradaArmar(cliente, pedido, a) {
+    var p = pedido || {};
+    return { key: p.pedidoId || 'c' + cliente.clienteId, clienteId: cliente.clienteId, pedidoId: p.pedidoId || '', nombre: cliente.nombre,
+      direccion: cliente.direccion, localidad: cliente.localidad, lat: cliente.lat, lng: cliente.lng, minutos: a.minutos,
+      fijo: !!p.fijo, desde: p.desde || cliente.desde || '', hasta: p.hasta || cliente.hasta || '' };
+  }
+
+  function estadoArmar(d) {
+    var a = { fecha: d.fecha, salida: d.ajustes.salida, volver: d.ajustes.volver, minutos: d.ajustes.minutos, base: d.base,
+      inicio: d.base.lat != null ? { lat: d.base.lat, lng: d.base.lng } : null, origen: 'base', manual: false, buscar: '', ahorro: 0,
+      pedidos: d.pedidos, clientes: d.clientes, leToca: d.leToca, paradas: [], res: null, requestId: uuid() };
+    var clientes = {};
+    d.clientes.forEach(function (c) { clientes[c.clienteId] = c; });
+    function clienteDe(p) {
+      return clientes[p.clienteId] || { clienteId: p.clienteId, nombre: p.cliente, direccion: p.direccion, localidad: p.localidad, lat: p.lat, lng: p.lng };
+    }
+    if (d.plan) {
+      a.salida = d.plan.salida;
+      a.volver = d.plan.regreso;
+      a.manual = true;
+      d.plan.paradas.forEach(function (s) {
+        var pedido = d.pedidos.filter(function (p) { return p.pedidoId === s.pedidoId; })[0];
+        if (s.pedidoId && !pedido) return; // Ya se entregó: no vuelve a la lista.
+        if (!clientes[s.clienteId]) return;
+        var x = paradaArmar(clientes[s.clienteId], pedido, a);
+        x.minutos = s.minutos;
+        x.fijo = s.fijo;
+        x.desde = s.desde;
+        x.hasta = s.hasta;
+        a.paradas.push(x);
+      });
+    } else {
+      d.pedidos.forEach(function (p) { a.paradas.push(paradaArmar(clienteDe(p), p, a)); });
+    }
+    return a;
+  }
+
+  function calcularArmar(sugerir) {
+    var a = S.armar;
+    a.res = null;
+    if (!a.inicio || !a.paradas.length) return;
+    var ruta = window.MINUE_RUTA;
+    var posicion = 0;
+    var paradas = a.paradas.map(function (p) {
+      var ubicada = p.lat != null && p.lng != null;
+      return { id: p.key, lat: p.lat, lng: p.lng, minutos: p.minutos, fijo: p.fijo, desde: p.desde, hasta: p.hasta, ref: p, posicion: !sugerir && ubicada ? posicion++ : null };
+    });
+    a.res = ruta.planificar({ inicio: a.inicio, fin: a.volver ? (a.base.lat != null ? a.base : a.inicio) : null, salida: ruta.toMinutes(a.salida) || 480, paradas: paradas });
+    if (sugerir) {
+      a.paradas = a.res.paradas.map(function (x) { return x.parada.ref; }).concat(a.res.sinUbicar.map(function (x) { return x.ref; }));
+      a.manual = false;
+      a.ahorro = a.res.ahorroMin;
+    }
+  }
+
+  function duracionTexto(min) {
+    var h = Math.floor(min / 60);
+    var m = min % 60;
+    return h ? h + ' h' + (m ? ' ' + m + ' min' : '') : m + ' min';
+  }
+
+  function moverParada(i, delta) {
+    var a = S.armar;
+    var otra = i + delta;
+    if (otra < 0 || otra >= a.paradas.length) return;
+    var x = a.paradas[i];
+    a.paradas[i] = a.paradas[otra];
+    a.paradas[otra] = x;
+    a.manual = true;
+    a.ahorro = 0;
+    calcularArmar(false);
+    pintarArmar();
+    var fila = document.getElementById('parada-' + otra);
+    if (fila) fila.scrollIntoView({ block: 'nearest' });
+  }
+
+  function agregarParada(cliente, pedido) {
+    var a = S.armar;
+    a.paradas.push(paradaArmar(cliente, pedido, a));
+    a.buscar = '';
+    calcularArmar(!a.manual);
+    pintarArmar();
+  }
+
+  function quitarParada(p) {
+    var a = S.armar;
+    a.paradas = a.paradas.filter(function (x) { return x !== p; });
+    calcularArmar(!a.manual);
+    pintarArmar();
+  }
+
+  function openParada(p) {
+    var f = { fijo: p.fijo };
+    var error = el('div', { class: 'error-box', hidden: true });
+    var chips = el('div');
+    var desde = el('input', { class: 'input', type: 'time', value: p.desde, 'aria-label': 'Desde' });
+    var hasta = el('input', { class: 'input', type: 'time', value: p.hasta, 'aria-label': 'Hasta' });
+    var minutos = el('input', { class: 'input', inputmode: 'numeric', value: String(p.minutos), 'aria-label': 'Minutos en el local' });
+    var ayuda = el('p', { class: 'small' });
+    function dibujar() {
+      clear(chips);
+      chips.appendChild(chipRow([[false, 'Libre'], [true, 'Fijo']], f.fijo, function (v) { f.fijo = v; dibujar(); }, 'Tipo de horario'));
+      ayuda.textContent = f.fijo ? 'El recorrido se arma para llegar dentro de ese horario.' : 'Pasás cuando te quede mejor en el camino.';
+    }
+    dibujar();
+    openSheet([el('h2', { text: p.nombre }), el('p', { class: 'small', text: p.direccion }), chips, ayuda,
+      el('div', { class: 'grid2' }, [el('label', { class: 'field' }, [el('span', { text: 'Desde' }), desde]), el('label', { class: 'field' }, [el('span', { text: 'Hasta' }), hasta])]),
+      el('label', { class: 'field' }, [el('span', { text: 'Minutos en el local' }), minutos]), error,
+      btn('Listo', 'primary', function () {
+        var m = Number(minutos.value);
+        if (!(m >= 0 && m <= 240)) { error.textContent = 'Escribí los minutos, de 0 a 240.'; error.hidden = false; return; }
+        if (f.fijo && (!desde.value || !hasta.value || hasta.value < desde.value)) { error.textContent = 'Para un horario fijo hacen falta el "desde" y el "hasta".'; error.hidden = false; return; }
+        p.fijo = f.fijo;
+        p.desde = desde.value;
+        p.hasta = hasta.value;
+        p.minutos = Math.round(m);
+        closeSheet(true);
+        calcularArmar(!S.armar.manual);
+        pintarArmar();
+      })], 'Horario de la parada');
+  }
+
+  function pintarMapaArmar(caja) {
+    var a = S.armar;
+    if (S.armarMapa) { S.armarMapa.remove(); S.armarMapa = null; }
+    var aviso = function () {
+      clear(caja);
+      caja.appendChild(el('p', { class: 'small mapa-aviso', text: 'Sin señal no podemos mostrar el mapa. La lista sirve igual.' }));
+    };
+    if (navigator.onLine === false) { aviso(); return; }
+    cargarMapa().then(function (L) {
+      if (!caja.isConnected || S.armar !== a) return;
+      var mapa = crearMapa(caja, L);
+      S.armarMapa = mapa;
+      var puntos = [];
+      if (a.inicio) {
+        puntos.push([a.inicio.lat, a.inicio.lng]);
+        L.marker(puntos[0], { icon: pinMapa(L, '⌂', 'base'), title: 'Salida' }).addTo(mapa);
+      }
+      (a.res ? a.res.paradas : []).forEach(function (x, i) {
+        var punto = [x.parada.lat, x.parada.lng];
+        puntos.push(punto);
+        L.marker(punto, { icon: pinMapa(L, String(i + 1), x.tarde > 0 ? 'tarde' : ''), title: x.parada.ref.nombre }).addTo(mapa)
+          .bindPopup(document.createTextNode(x.parada.ref.nombre + ' · ' + x.llegada));
+      });
+      if (puntos.length > 1) {
+        var linea = a.volver && a.inicio ? puntos.concat([puntos[0]]) : puntos;
+        L.polyline(linea, { color: '#B45309', weight: 3, opacity: .75 }).addTo(mapa);
+        mapa.fitBounds(puntos, { padding: [28, 28], maxZoom: 15 });
+      } else if (puntos.length) mapa.setView(puntos[0], 14);
+      else mapa.setView([-34.66, -58.37], 11);
+      setTimeout(function () { if (S.armarMapa === mapa) mapa.invalidateSize(); }, 200);
+    }, aviso);
+  }
+
+  function pintarArmar() {
+    var a = S.armar;
+    if (!a) return;
+    if (S.armarMapa) { S.armarMapa.remove(); S.armarMapa = null; }
+    clear(main);
+    main.appendChild(el('h1', { text: 'Armar recorrido' }));
+
+    var cuando = a.fecha === todayKey() ? 'hoy' : a.fecha === todayKey(1) ? 'manana' : 'otro';
+    var fecha = el('input', { class: 'input', type: 'date', value: a.fecha, min: todayKey(), 'aria-label': 'Fecha del recorrido' });
+    fecha.addEventListener('change', function () { if (fecha.value) renderArmar(fecha.value); });
+    var salida = el('input', { class: 'input', type: 'time', value: a.salida, 'aria-label': 'Hora de salida' });
+    salida.addEventListener('change', function () {
+      if (!salida.value) return;
+      a.salida = salida.value;
+      calcularArmar(!a.manual);
+      pintarArmar();
+    });
+    var opciones = el('div', { class: 'card' }, [
+      chipRow([['hoy', 'Hoy'], ['manana', 'Mañana']], cuando, function (v) { renderArmar(todayKey(v === 'hoy' ? 0 : 1)); }, 'Día del recorrido'),
+      el('div', { class: 'grid2' }, [el('label', { class: 'field' }, [el('span', { text: 'Día' }), fecha]), el('label', { class: 'field' }, [el('span', { text: 'Salís a las' }), salida])])
+    ]);
+    if (cuando === 'hoy') {
+      opciones.appendChild(el('div', { class: 'field' }, [el('span', { class: 'field-title', text: 'Salís desde' }),
+        chipRow([['base', 'La base'], ['aca', 'Donde estoy']], a.origen, function (v) {
+          if (v === 'base') {
+            a.origen = 'base';
+            a.inicio = a.base.lat != null ? { lat: a.base.lat, lng: a.base.lng } : null;
+            calcularArmar(!a.manual);
+            pintarArmar();
+            return;
+          }
+          toast('Buscando dónde estás…');
+          miUbicacion().then(function (p) {
+            a.origen = 'aca';
+            a.inicio = { lat: p.lat, lng: p.lng };
+            a.salida = window.MINUE_RUTA.hora(window.MINUE_RUTA.nowMinutes());
+            calcularArmar(!a.manual);
+            pintarArmar();
+          }, function (e) { toast(e.message, { error: true }); });
+        }, 'Lugar de salida')]));
+    }
+    opciones.appendChild(el('div', { class: 'field' }, [el('span', { class: 'field-title', text: 'Al terminar' }),
+      chipRow([[true, 'Vuelvo a la base'], [false, 'Termino en la última']], a.volver, function (v) {
+        a.volver = v;
+        calcularArmar(!a.manual);
+        pintarArmar();
+      }, 'Al terminar')]));
+    main.appendChild(opciones);
+
+    if (!a.inicio) {
+      main.appendChild(el('div', { class: 'note', text: 'Falta marcar en el mapa desde dónde salís. Sin eso no podemos calcular los tiempos.' }));
+      if (S.rol === 'admin') {
+        main.appendChild(btn('Marcar la salida', 'secondary', function () {
+          openUbicar({ base: true, titulo: 'Salida', direccion: a.base.address, onSaved: function (p) {
+            a.base.lat = p.lat;
+            a.base.lng = p.lng;
+            a.inicio = p;
+            calcularArmar(!a.manual);
+            pintarArmar();
+          } });
+        }, 'map'));
+      }
+    }
+
+    var r = a.res;
+    if (r && r.paradas.length) {
+      main.appendChild(el('section', { class: 'hero plan-resumen', 'aria-label': 'Resumen del recorrido' }, [
+        el('div', { class: 'hero-kicker', text: a.volver ? 'Volvés a las' : 'Terminás a las' }),
+        el('div', { class: 'panel-big', text: r.regreso }),
+        el('div', { class: 'plan-datos' }, [
+          el('span', { text: a.paradas.length + (a.paradas.length === 1 ? ' parada' : ' paradas') }),
+          el('span', { text: duracionTexto(r.duracionMin) }),
+          el('span', { text: String(r.km).replace('.', ',') + ' km' })
+        ])
+      ]));
+      if (r.demoradas) main.appendChild(el('div', { class: 'error-box', text: r.demoradas === 1 ? 'Una parada llega tarde a su horario. Revisala abajo.' : r.demoradas + ' paradas llegan tarde a su horario. Revisalas abajo.' }));
+      if (a.ahorro >= 5) main.appendChild(el('p', { class: 'small', text: 'Este orden te ahorra unos ' + a.ahorro + ' min.' }));
+    }
+
+    var cajaMapa = el('div', { class: 'mapa', role: 'img', 'aria-label': 'Mapa del recorrido. El orden y las horas están en la lista de abajo.' });
+    if (a.paradas.length || a.inicio) main.appendChild(cajaMapa);
+
+    main.appendChild(el('h2', { text: 'Paradas' }));
+    if (!a.paradas.length) main.appendChild(el('div', { class: 'card empty' }, [el('strong', { text: 'Todavía no elegiste a quién visitar' }), el('span', { text: 'Sumá clientes desde la lista de abajo.' })]));
+    var detalle = {};
+    if (r) r.paradas.forEach(function (x) { detalle[x.parada.ref.key] = x; });
+    a.paradas.forEach(function (p, i) {
+      var x = detalle[p.key];
+      var textoHorario = p.fijo ? 'Fijo ' + p.desde + ' a ' + p.hasta : 'Horario libre';
+      var sinUbicar = p.lat == null || p.lng == null;
+      main.appendChild(el('div', { class: 'parada', id: 'parada-' + i }, [
+        el('span', { class: 'parada-num' + (x && x.tarde > 0 ? ' tarde' : ''), text: String(i + 1) }),
+        el('div', { class: 'parada-texto' }, [
+          el('strong', { text: p.nombre }),
+          el('div', { class: 'small', text: p.direccion + ' · ' + nice(p.localidad) }),
+          x ? el('div', { class: 'parada-hora', text: 'Llegás ' + x.llegada + ' · ' + x.tramoMin + ' min de viaje' }) : null,
+          x && x.motivo ? el('div', { class: 'small' + (x.tarde > 0 ? ' late-text' : ''), text: x.motivo }) : null,
+          !p.pedidoId ? el('div', { class: 'small', text: 'Visita sin pedido' }) : null,
+          sinUbicar ? el('div', { class: 'small late-text', text: 'Sin ubicación: no entra en el cálculo' }) : null,
+          el('div', { class: 'parada-acciones' }, [
+            el('button', { class: 'chip', type: 'button', text: textoHorario, onclick: function () { openParada(p); } }),
+            sinUbicar ? el('button', { class: 'chip', type: 'button', text: 'Ubicar', onclick: function () {
+              openUbicar({ clientId: p.clienteId, titulo: p.nombre, direccion: p.direccion + ', ' + p.localidad, cerca: a.inicio, onSaved: function (punto) {
+                a.paradas.concat(a.clientes).forEach(function (c) { if (c.clienteId === p.clienteId) { c.lat = punto.lat; c.lng = punto.lng; } });
+                calcularArmar(!a.manual);
+                pintarArmar();
+              } });
+            } }) : null,
+            el('button', { class: 'chip', type: 'button', text: 'Quitar', 'aria-label': 'Quitar a ' + p.nombre, onclick: function () { quitarParada(p); } })
+          ])
+        ]),
+        el('div', { class: 'parada-mover' }, [
+          el('button', { type: 'button', text: '↑', 'aria-label': 'Subir a ' + p.nombre, disabled: i === 0 ? 'disabled' : null, onclick: function () { moverParada(i, -1); } }),
+          el('button', { type: 'button', text: '↓', 'aria-label': 'Bajar a ' + p.nombre, disabled: i === a.paradas.length - 1 ? 'disabled' : null, onclick: function () { moverParada(i, 1); } })
+        ])
+      ]));
+    });
+
+    var elegidos = {};
+    a.paradas.forEach(function (p) { elegidos[p.key] = true; elegidos['c' + p.clienteId] = true; });
+    var sinSumar = a.pedidos.filter(function (p) { return !elegidos[p.pedidoId]; });
+    if (sinSumar.length) {
+      main.appendChild(el('h2', { text: 'Pedidos sin sumar' }));
+      sinSumar.forEach(function (p) {
+        var c = a.clientes.filter(function (x) { return x.clienteId === p.clienteId; })[0] || { clienteId: p.clienteId, nombre: p.cliente, direccion: p.direccion, localidad: p.localidad, lat: p.lat, lng: p.lng };
+        main.appendChild(btn(p.cliente + ' · ' + dayLabel(p.fecha), 'secondary', function () { agregarParada(c, p); }, 'plus'));
+      });
+    }
+    var toca = a.leToca.filter(function (l) { return !elegidos['c' + l.clienteId]; });
+    if (toca.length) {
+      main.appendChild(el('h2', { text: 'Les toca comprar' }));
+      toca.forEach(function (l) {
+        var c = a.clientes.filter(function (x) { return x.clienteId === l.clienteId; })[0];
+        if (!c) return;
+        main.appendChild(el('button', { class: 'list-item', type: 'button', onclick: function () { agregarParada(c); } }, [
+          el('span', {}, [el('strong', { text: l.nombre }), el('div', { class: 'small', text: 'Compra cada ' + l.cadaDias + ' días · última ' + dayLabel(l.ultimaCompra) })]),
+          el('span', { class: 'badge' + (l.estado === 'En riesgo' ? ' crit' : ' urgent'), text: l.estado })
+        ]));
+      });
+    }
+
+    main.appendChild(el('h2', { text: 'Sumar otro cliente' }));
+    var buscar = el('input', { class: 'input', type: 'search', value: a.buscar, placeholder: 'Nombre o dirección', 'aria-label': 'Buscar cliente' });
+    var resultados = el('div', { class: 'stack' });
+    function filtrar() {
+      clear(resultados);
+      var q = norm(buscar.value);
+      if (!q) return;
+      var lista = a.clientes.filter(function (c) { return !elegidos['c' + c.clienteId] && norm(c.nombre + ' ' + c.direccion).indexOf(q) !== -1; }).slice(0, 6);
+      if (!lista.length) resultados.appendChild(el('p', { class: 'small', text: 'No encontramos ese cliente.' }));
+      lista.forEach(function (c) { resultados.appendChild(btn(c.nombre, 'secondary', function () { agregarParada(c); }, 'plus')); });
+    }
+    buscar.addEventListener('input', function () { a.buscar = buscar.value; filtrar(); });
+    main.appendChild(el('div', { class: 'field' }, [buscar]));
+    main.appendChild(resultados);
+    filtrar();
+
+    var error = el('div', { class: 'error-box', hidden: true });
+    var guardar = el('button', { class: 'btn primary', type: 'button', text: 'Guardar recorrido' });
+    guardar.disabled = !a.paradas.length;
+    guardar.addEventListener('click', function () {
+      error.hidden = true;
+      setBusy(guardar, 'Guardando…');
+      var res = a.res;
+      var detallePor = {};
+      if (res) res.paradas.forEach(function (x) { detallePor[x.parada.ref.key] = x; });
+      write('guardarRecorrido', { requestId: a.requestId, fecha: a.fecha, salida: a.salida, inicio: a.origen === 'aca' ? a.inicio : null, regreso: a.volver,
+        resumen: res ? { km: res.km, regreso: res.regreso, minutos: res.duracionMin, demoradas: res.demoradas } : {},
+        paradas: a.paradas.map(function (p) {
+          var x = detallePor[p.key];
+          return { clienteId: p.clienteId, pedidoId: p.pedidoId, minutos: p.minutos, fijo: p.fijo, desde: p.desde, hasta: p.hasta,
+            fijada: a.manual, llegada: x ? x.llegada : '', motivo: x ? x.motivo : '' };
+        }) }, 'Recorrido del ' + dayLabel(a.fecha)).then(function () {
+        toast('Recorrido guardado.');
+        if (a.fecha === todayKey()) go('inicio');
+        else renderArmar(a.fecha);
+      }, function (e) {
+        unsetBusy(guardar);
+        error.textContent = e.code === 'NETWORK' ? 'No hay señal. Quedó arriba para reintentar.' : e.message || 'No se pudo guardar.';
+        error.hidden = false;
+      });
+    });
+    main.appendChild(el('div', { class: 'stack armar-fin' }, [
+      a.manual && a.paradas.length > 1 && a.inicio ? btn('Sugerir orden', 'secondary', function () { calcularArmar(true); pintarArmar(); }, 'route') : null,
+      error, guardar,
+      el('p', { class: 'small', text: 'Orden sugerido. Las horas son aproximadas: no tienen en cuenta el tránsito.' })
+    ]));
+    if (a.paradas.length || a.inicio) pintarMapaArmar(cajaMapa);
+  }
+
   /* ---------------- Nuevo pedido ---------------- */
 
   function emptyDraft(clientId) {
@@ -2331,10 +3097,11 @@
       importe: '', medio: 'EFECTIVO', recibe: '', observaciones: '', requestId: '' };
   }
 
-  function openNuevoPedido(clientId) {
+  function openNuevoPedido(clientId, paradaId) {
     var draft = load('minue.borrador', null);
     if (clientId && (!draft || draft.clientId !== clientId)) draft = emptyDraft(clientId);
     if (!draft) draft = emptyDraft();
+    if (paradaId) draft.paradaId = paradaId;
     S.current = function () { openNuevoPedido(); };
     S.tab = 'pedidos';
     markTab('pedidos');
@@ -2523,6 +3290,8 @@
         el('label', { class: 'field' }, [el('span', { text: 'Desde' }), from]),
         el('label', { class: 'field' }, [el('span', { text: 'Hasta' }), to])
       ]));
+      whenSection.appendChild(el('div', { class: 'field' }, [el('span', { style: 'display:block;font-weight:700;margin:14px 0 6px', text: 'Ese horario es' }),
+        chipRow([[false, 'Libre'], [true, 'Fijo']], !!draft.horarioFijo, function (v) { draft.horarioFijo = v; save(); drawWhen(); }, 'Tipo de horario')]));
       var prio = el('div', { class: 'chips' });
       [['NORMAL', 'Normal'], ['URGENTE', 'Urgente'], ['CRÍTICA', 'Crítica']].forEach(function (pr) {
         prio.appendChild(el('button', { class: 'chip', type: 'button', 'aria-pressed': String(draft.prioridad === pr[0]), text: pr[1], onclick: function () {
@@ -2606,6 +3375,7 @@
       if (!lineIds.length) problems.push('Agregá al menos un producto (paso 2).');
       if (!draft.fecha) problems.push('Elegí la fecha de entrega (paso 3).');
       if (draft.desde && draft.hasta && draft.hasta < draft.desde) problems.push('El horario "hasta" es antes que "desde".');
+      if (draft.horarioFijo && (!draft.desde || !draft.hasta)) problems.push('Para un horario fijo hacen falta el "desde" y el "hasta".');
       var paid = draft.pago === 'todo' ? total : draft.pago === 'parte' ? parseMoney(draft.importe) : 0;
       if (draft.pago === 'parte' && (paid === null || paid <= 0)) problems.push('Escribí cuánto te pagó (paso 4).');
       if (paid > total + 0.01) problems.push('El pago es mayor que el total.');
@@ -2624,7 +3394,7 @@
       var saveBtn = btn('Guardar pedido', 'primary', function () {
         setBusy(saveBtn, 'Guardando…');
         var payload = {
-          requestId: draft.requestId, clientId: draft.clientId, fecha: draft.fecha, desde: draft.desde, hasta: draft.hasta,
+          requestId: draft.requestId, clientId: draft.clientId, fecha: draft.fecha, desde: draft.desde, hasta: draft.hasta, horarioFijo: !!draft.horarioFijo, paradaId: draft.paradaId || '',
           prioridad: draft.prioridad, recibe: draft.recibe, observaciones: draft.observaciones,
           lineas: lineIds.map(function (id) { return { productId: id, presentacion: draft.lines[id].presentacion, cantidad: draft.lines[id].cantidad }; }),
           pagoInicial: paid || 0, medio: paid > 0 ? draft.medio : '', totalEsperado: total
@@ -2733,7 +3503,14 @@
       if (c.telefono) contact.push(linkBtn('tel:' + c.telefono, 'Llamar', 'secondary', 'phone'));
       if (c.whatsapp) contact.push(linkBtn(c.whatsapp, 'WhatsApp', 'secondary', 'chat'));
       if (contact.length) main.appendChild(el('div', { class: 'btn-row' }, contact));
-      main.appendChild(el('div', { style: 'margin-top:10px' }, [linkBtn(c.mapsUrl, 'Ver en Maps', 'secondary', 'map')]));
+      main.appendChild(el('div', { class: 'btn-row', style: 'margin-top:10px' }, [
+        linkBtn(c.mapsUrl, 'Ver en Maps', 'secondary', 'map'),
+        btn(c.lat != null ? 'Corregir ubicación' : 'Guardar ubicación', 'secondary', function () {
+          openUbicar({ clientId: c.clientId, titulo: c.nombre, direccion: c.direccion + ', ' + c.localidad, lat: c.lat, lng: c.lng,
+            cerca: S.hoy && S.hoy.recorrido && S.hoy.recorrido.base, onSaved: function () { renderCliente(clientId); } });
+        })
+      ]));
+      if (c.lat == null) main.appendChild(el('p', { class: 'small', text: 'Sin ubicación guardada: todavía no entra en el cálculo del recorrido.' }));
 
       main.appendChild(el('div', { class: 'card', style: 'margin-top:16px' }, [el('dl', { class: 'info', style: 'margin:0' }, [
         el('dt', { text: 'Debe' }), el('dd', { class: c.saldo > 0 ? 'owe' : 'paid', text: c.saldo > 0 ? money(c.saldo) : 'Nada' }),
