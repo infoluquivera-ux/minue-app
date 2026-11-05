@@ -2527,7 +2527,7 @@
       main.appendChild(el('label', { class: 'field' }, [el('span', { text: 'Hasta' }), hasta]));
       main.appendChild(btn('Ver', 'secondary', function () { S.panel.desde = desde.value; S.panel.hasta = hasta.value; renderPanel(); }));
     }
-    main.appendChild(el('p', { class: 'small', text: dayLabel(r.desde) + (r.hasta !== r.desde ? ' a ' + dayLabel(r.hasta) : '') }));
+    main.appendChild(el('p', { class: 'small', text: dayLabel(r.desde) + (r.hasta !== r.desde ? ' a ' + dayLabel(r.hasta).toLowerCase() : '') }));
     var caja = el('div');
     caja.appendChild(el('div', { class: 'skeleton' }));
     main.appendChild(caja);
@@ -3320,7 +3320,7 @@
     if (a.paradas.length || a.inicio) main.appendChild(cajaMapa);
 
     main.appendChild(el('h2', { text: 'Paradas' }));
-    if (!a.paradas.length) main.appendChild(el('div', { class: 'card empty' }, [el('strong', { text: 'Todavía no elegiste a quién visitar' }), el('span', { text: 'Sumá clientes desde la lista de abajo.' })]));
+    if (!a.paradas.length && a.clientes.length) main.appendChild(el('div', { class: 'card empty' }, [el('strong', { text: 'Todavía no elegiste a quién visitar' }), el('span', { text: 'Sumá clientes desde la lista de abajo.' })]));
     var detalle = {};
     if (r) r.paradas.forEach(function (x) { detalle[x.parada.ref.key] = x; });
     a.paradas.forEach(function (p, i) {
@@ -3564,6 +3564,11 @@
           var hay = norm(c.nombre + ' ' + c.direccion + ' ' + c.localidad + ' ' + c.responsable);
           return q.every(function (t) { return hay.indexOf(t) !== -1; });
         }).slice(0, q.length ? 8 : 5);
+        if (!cat.clientes.length) {
+          results.appendChild(el('p', { class: 'small', text: 'Todavía no tenés clientes. Cargá el primero y volvé acá.' }));
+          results.appendChild(btn('Cargar cliente', 'primary', function () { leave(); go('clientes'); openClienteForm(null); }, 'plus'));
+          return;
+        }
         list.forEach(function (c) {
           results.appendChild(el('button', { class: 'list-item', type: 'button', onclick: function () {
             draft.clientId = c.clientId;
@@ -3844,7 +3849,8 @@
             el('div', { class: 'small', text: c.direccion + ' · ' + nice(c.localidad) + (c.estado === 'INACTIVO' ? ' · Inactivo' : '') })
           ]));
         });
-        if (!shown.length) list.appendChild(el('div', { class: 'empty' }, [el('strong', { text: 'No hay clientes con ese nombre' }), el('span', { text: 'Probá con otra palabra o creá uno nuevo.' })]));
+        if (!d.clientes.length) list.appendChild(el('div', { class: 'empty' }, [el('strong', { text: 'Todavía no tenés clientes' }), el('span', { text: 'Tocá Nuevo cliente para cargar el primero.' })]));
+        else if (!shown.length) list.appendChild(el('div', { class: 'empty' }, [el('strong', { text: 'No hay clientes con ese nombre' }), el('span', { text: 'Probá con otra palabra o creá uno nuevo.' })]));
       }
       input.addEventListener('input', update);
       update();
