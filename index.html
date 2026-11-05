@@ -520,6 +520,23 @@
     main.with-fab { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px); }
   }
   .welcome-fila { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 var(--sp-3); }
+
+  /* Primeros pasos */
+  .pasos h2 { margin: 0; }
+  .pasos > .small { margin: 2px 0 var(--sp-3); }
+  .pasos ol { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-3); }
+  .pasos li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; align-items: start; color: var(--c-muted); }
+  .pasos li.actual { color: var(--c-text); }
+  .pasos-num { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--c-control); font-weight: 800; }
+  .pasos li.actual .pasos-num { background: var(--c-action); border-color: var(--c-action); color: var(--c-on-action); }
+  .pasos li.hecho .pasos-num { border-color: var(--c-success); color: var(--c-success); }
+  .pasos-num svg { width: 20px; height: 20px; }
+  .sugerencia { margin-top: var(--sp-3); }
+  .sugerencia p { margin: 2px 0 var(--sp-3); }
+  .dias-chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .dias-chips .chip { padding: 8px 2px; }
+  .tuto-mapa { position: relative; height: 110px; border-radius: 12px; background: repeating-linear-gradient(35deg, var(--c-sunken) 0 18px, var(--c-border) 18px 20px); }
+  .tuto-mapa span { position: absolute; left: 50%; top: 50%; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; margin: -15px; border-radius: 50%; background: var(--c-progress); color: var(--stone-900); font-weight: 800; }
 </style>
 
   <style>
@@ -1700,6 +1717,18 @@
     ]));
     }
 
+    var pasos = d.pasos;
+    var guiando = pasos && !(pasos.clientes && pasos.ubicados && pasos.pedidos && pasos.recorridos);
+    if (guiando) main.appendChild(primerosPasos(pasos));
+    else if (pasos && pasos.sugeridosHoy && !r.plan) {
+      main.appendChild(el('div', { class: 'card sugerencia' }, [
+        el('strong', { text: 'Hoy es ' + pasos.diaHoy }),
+        el('p', { class: 'small', text: pasos.sugeridosHoy === 1 ? 'Un cliente suele recibir hoy.' : pasos.sugeridosHoy + ' clientes suelen recibir hoy.' }),
+        btn('Armar el recorrido', 'primary', function () { go('armar'); }, 'route')
+      ]));
+    }
+
+    if (!r.stops.length && guiando) { resumenDia(); return; }
     if (!r.stops.length) {
       main.appendChild(el('div', { class: 'card empty' }, [
         done ? checkMark() : null,
@@ -1742,6 +1771,33 @@
       el('p', { class: 'small', text: (r.plan ? 'Seguís el orden que guardaste. Las horas son aproximadas: no tienen en cuenta el tránsito.' : r.explicacion) + (r.modo !== 'aproximado' ? ' Algunas direcciones no se ubicaron en el mapa: van al final.' : '') }),
       el('p', { class: 'small', text: 'En el celular, Maps puede mostrar pocas paradas juntas. Lo más seguro es ir con Maps parada por parada.' })
     ]));
+  }
+
+  /** Mientras la app está vacía, muestra qué hacer y en qué orden. Avanza sola con lo que se carga. */
+  function primerosPasos(p) {
+    var items = [
+      [p.clientes > 0, 'Cargá tu primer cliente', 'Con su dirección, días y horario.', 'Cargar cliente', function () { go('clientes'); openClienteForm(null); }],
+      [p.ubicados > 0, 'Marcá dónde queda', 'Así la app puede calcular el recorrido.', 'Ir a clientes', function () { go('clientes'); }],
+      [p.pedidos > 0, 'Cargá un pedido', 'Elegí cliente, productos y fecha.', 'Cargar pedido', function () { openNuevoPedido(); }],
+      [p.recorridos > 0, 'Armá el recorrido', 'La app sugiere el orden y la hora de vuelta.', 'Armar recorrido', function () { go('armar'); }]
+    ];
+    var hechos = items.filter(function (x) { return x[0]; }).length;
+    var siguiente = items.filter(function (x) { return !x[0]; })[0];
+    return el('section', { class: 'card pasos', 'aria-label': 'Primeros pasos' }, [
+      el('h2', { text: 'Primeros pasos' }),
+      el('p', { class: 'small', text: hechos + ' de ' + items.length + ' listos' }),
+      el('ol', {}, items.map(function (x, i) {
+        var actual = x === siguiente;
+        return el('li', { class: x[0] ? 'hecho' : actual ? 'actual' : '' }, [
+          el('span', { class: 'pasos-num', 'aria-hidden': 'true' }, [x[0] ? icon('check') : String(i + 1)]),
+          el('div', {}, [
+            el('strong', { text: x[1] + (x[0] ? ' (listo)' : '') }),
+            actual ? el('div', { class: 'small', text: x[2] }) : null,
+            actual ? el('div', { style: 'margin-top:10px' }, [btn(x[3], 'primary', x[4])]) : null
+          ])
+        ]);
+      }))
+    ]);
   }
 
   /** Tarjeta de la siguiente parada: un solo botón principal que cambia según el estado. */
@@ -2758,54 +2814,66 @@
 
   function pasosGuia() {
     return [
-      { titulo: 'Tu día de reparto, en un solo lugar', texto: 'Con esta guía aprendés a usar la app en unos minutos.', ventajas: [
-        'Sabés a quién ir y en qué orden.',
-        'Tenés cobros y deudas sin papeles.',
-        'Ves cuánto vendiste y tu comisión.',
-        'Si se corta la señal, lo que cargás se guarda cuando vuelve.'
+      { titulo: 'Tu día de reparto, en un solo lugar', texto: 'En unos minutos aprendés cómo se usa, desde el primer cliente.', ventajas: [
+        'Tenés todos tus clientes y sus horarios juntos.',
+        'La app te sugiere a quién visitar cada día.',
+        'Cobros y deudas sin papeles.',
+        'Ves cuánto vendiste y tu comisión.'
       ] },
-      { paso: 1, titulo: 'Mirá tu día', texto: 'Al entrar, en Hoy ves la próxima parada y cuántas entregas llevás.', dibujo: telefonoGuia([
-        el('strong', { text: 'Hoy llevás 2 de 6' }),
-        el('div', { class: 'tuto-barra' }, [el('i')]),
-        tarjetaGuia(botonGuia('Ir con Maps'))
+      { paso: 1, titulo: 'Cargá tus clientes', texto: 'Uno por uno: nombre, dirección, los días que reciben y su horario.', dibujo: telefonoGuia([
+        el('strong', { text: 'Nuevo cliente' }),
+        el('div', { class: 'tuto-fila' }, [el('span', { text: 'Nombre' }), el('b', { text: 'Almacén Ejemplo' })]),
+        el('div', { class: 'tuto-fila' }, [el('span', { text: 'Dirección' }), el('b', { text: 'Av. Principal 100' })]),
+        el('div', { class: 'tuto-chips' }, [el('span', { class: 'activo', text: 'Lun' }), el('span', { text: 'Mar' }), el('span', { class: 'activo', text: 'Jue' }), el('span', { text: 'Vie' })]),
+        el('div', { class: 'tuto-fila' }, [el('span', { text: 'Recibe' }), el('b', { text: '9:00 a 13:00' })]),
+        botonGuia('Guardar cliente', true)
       ]) },
-      { paso: 2, titulo: 'Armá el recorrido', texto: 'Elegí los clientes y la hora de salida. La app sugiere el orden y te dice a qué hora volvés.', dibujo: telefonoGuia([
+      { paso: 2, titulo: 'Marcá dónde queda', texto: 'Al guardar el cliente, la app busca la dirección. Revisá el punto en el mapa y guardalo.', dibujo: telefonoGuia([
+        el('strong', { text: 'Ubicación' }),
+        el('div', { class: 'tuto-mapa' }, [el('span', { text: '1' })]),
+        botonGuia('Guardar ubicación', true)
+      ]) },
+      { paso: 3, titulo: 'Cargá un pedido', texto: 'Tocá el botón Pedido. Elegí el cliente, los productos y cuándo se entrega.', dibujo: telefonoGuia([
+        el('strong', { text: 'Nuevo pedido' }),
+        el('div', { class: 'tuto-fila' }, [el('span', { text: 'Cliente' }), el('b', { text: 'Almacén Ejemplo' })]),
+        el('div', { class: 'tuto-fila' }, [el('span', { text: 'Caja de alfajores' }), el('b', { text: '− 2 +' })]),
+        el('div', { class: 'tuto-fila' }, [el('span', { text: 'Total' }), el('b', { text: '$ 24.000' })]),
+        botonGuia('Guardar pedido', true)
+      ]) },
+      { paso: 4, titulo: 'Armá el recorrido', texto: 'Aparecen los pedidos y los clientes que reciben ese día. Sumalos y la app sugiere el orden.', dibujo: telefonoGuia([
         el('div', { class: 'tuto-card oscura' }, [el('div', { class: 'tuto-kicker', text: 'Volvés a las' }), el('div', { class: 'tuto-grande', text: '12:30' })]),
-        ['Almacén Ejemplo · 08:15', 'Kiosco Ejemplo · 09:00', 'Despensa Ejemplo · 10:30'].map(function (t, i) {
+        el('div', { class: 'tuto-chico', text: 'Suelen recibir los lunes' }),
+        ['Almacén Ejemplo · 08:15', 'Kiosco Ejemplo · 09:00'].map(function (t, i) {
           return el('div', { class: 'tuto-parada' }, [el('span', { text: String(i + 1) }), t]);
         }),
         botonGuia('Guardar recorrido', true)
       ].reduce(function (a, b) { return a.concat(b); }, [])) },
-      { paso: 3, titulo: 'Andá con Maps', texto: 'Tocá Ir con Maps y seguí el camino. Cuando llegues, volvé a la app.', dibujo: telefonoGuia([tarjetaGuia(botonGuia('Ir con Maps', true)), botonGuia('Ya estoy acá')]) },
-      { paso: 4, titulo: 'Entregá y cobrá', texto: 'Tocá Entregué y elegí si te pagó todo, una parte o nada. La deuda se actualiza sola.', dibujo: telefonoGuia([
+      { paso: 5, titulo: 'Salí a entregar', texto: 'En Hoy ves la próxima parada. Tocá Ir con Maps y, al llegar, volvé a la app.', dibujo: telefonoGuia([
+        el('strong', { text: 'Hoy llevás 2 de 6' }),
+        el('div', { class: 'tuto-barra' }, [el('i')]),
+        tarjetaGuia(botonGuia('Ir con Maps', true))
+      ]) },
+      { paso: 6, titulo: 'Entregá y cobrá', texto: 'Tocá Entregué y elegí si te pagó todo, una parte o nada. La deuda se actualiza sola.', dibujo: telefonoGuia([
         el('strong', { text: 'Entregar a Almacén Ejemplo' }),
         el('div', { class: 'tuto-chico', text: '¿Te pagó?' }),
         el('div', { class: 'tuto-grande', text: '$ 45.000' }),
         el('div', { class: 'tuto-chips' }, [el('span', { class: 'activo', text: 'Todo' }), el('span', { text: 'Una parte' }), el('span', { text: 'No pagó' })]),
         botonGuia('Entregué y cobré', true)
       ]) },
-      { paso: 5, titulo: 'Cargá un pedido', texto: 'Tocá el botón Pedido. Elegí el cliente, los productos y cuándo se entrega.', dibujo: telefonoGuia([
-        el('strong', { text: 'Nuevo pedido' }),
-        el('div', { class: 'tuto-fila' }, [el('span', { text: 'Caja de alfajores' }), el('b', { text: '− 2 +' })]),
-        el('div', { class: 'tuto-fila' }, [el('span', { text: 'Se entrega' }), el('b', { text: 'Mañana' })]),
-        el('div', { class: 'tuto-fila' }, [el('span', { text: 'Total' }), el('b', { text: '$ 24.000' })]),
-        botonGuia('Guardar pedido', true)
-      ]) },
-      { paso: 6, titulo: 'Mirá cuánto vendiste', texto: 'Abrí el menú y tocá Panel. Ves lo que generaste para MINUÉ y tu comisión.', dibujo: telefonoGuia([
+      { paso: 7, titulo: 'Mirá cuánto vendiste', texto: 'Abrí el menú y tocá Panel. Ves lo que generaste para MINUÉ y tu comisión.', dibujo: telefonoGuia([
         el('div', { class: 'tuto-card oscura' }, [
           el('div', { class: 'tuto-kicker', text: 'Facturación para MINUÉ' }), el('div', { class: 'tuto-grande', text: '$ 1.250.000' }),
           el('div', { class: 'tuto-kicker', text: 'Tu comisión' }), el('div', { class: 'tuto-grande', text: '$ 125.000' })
-        ]),
-        el('div', { class: 'tuto-fila' }, [el('span', { text: 'Cajas vendidas' }), el('b', { text: '104' })])
+        ])
       ]) },
-      { titulo: 'Ya podés empezar', texto: 'Esta guía queda en el menú, en Cómo usar la app, para verla cuando quieras.', fin: true }
+      { titulo: 'Ya podés empezar', texto: 'En Hoy te vamos a guiar con tu primer cliente. Esta guía queda en el menú, en Cómo usar la app.', fin: true }
     ];
   }
 
   function renderAyuda() {
     S.current = renderAyuda;
     setFab(false);
-    store('minue.guia', '1');
+    store('minue.guia2', '1');
     var pasos = pasosGuia();
     var actual = 0;
     var totalPasos = pasos.filter(function (p) { return p.paso; }).length;
@@ -2990,7 +3058,7 @@
       mapa.setView(inicio, punto ? 16 : 13);
       if (punto) marca = L.marker(punto, { icon: pinMapa(L, '•', 'base') }).addTo(mapa);
       mapa.on('click', function (e) { marcar(e.latlng, 'Marcado en el mapa.'); });
-      setTimeout(function () { mapa.invalidateSize(); }, 250);
+      setTimeout(function () { mapa.invalidateSize(); if (o.auto && !punto) buscar.click(); }, 250);
     }, function () {
       caja.hidden = true;
       estado.textContent = 'El mapa no se pudo abrir. Con "Estoy acá ahora" podés guardar la ubicación igual.';
@@ -3024,7 +3092,7 @@
   function estadoArmar(d) {
     var a = { fecha: d.fecha, salida: d.ajustes.salida, volver: d.ajustes.volver, minutos: d.ajustes.minutos, base: d.base,
       inicio: d.base.lat != null ? { lat: d.base.lat, lng: d.base.lng } : null, origen: 'base', manual: false, buscar: '', ahorro: 0,
-      pedidos: d.pedidos, clientes: d.clientes, leToca: d.leToca, paradas: [], res: null, requestId: uuid() };
+      pedidos: d.pedidos, clientes: d.clientes, leToca: d.leToca, sugeridos: d.sugeridos || [], paradas: [], res: null, requestId: uuid() };
     var clientes = {};
     d.clientes.forEach(function (c) { clientes[c.clienteId] = c; });
     function clienteDe(p) {
@@ -3296,6 +3364,29 @@
         var c = a.clientes.filter(function (x) { return x.clienteId === p.clienteId; })[0] || { clienteId: p.clienteId, nombre: p.cliente, direccion: p.direccion, localidad: p.localidad, lat: p.lat, lng: p.lng };
         main.appendChild(btn(p.cliente + ' · ' + dayLabel(p.fecha), 'secondary', function () { agregarParada(c, p); }, 'plus'));
       });
+    }
+    if (!a.clientes.length) {
+      main.appendChild(el('div', { class: 'card empty' }, [el('strong', { text: 'Primero cargá tus clientes' }), el('span', { text: 'Después los elegís acá para armar el recorrido.' }),
+        el('div', { style: 'margin-top:12px' }, [btn('Cargar cliente', 'primary', function () { go('clientes'); openClienteForm(null); }, 'plus')])]));
+    }
+    var conPedido = {};
+    a.pedidos.forEach(function (p) { conPedido[p.clienteId] = true; });
+    var delDia = a.sugeridos.map(function (id) { return a.clientes.filter(function (c) { return c.clienteId === id; })[0]; })
+      .filter(function (c) { return c && !elegidos['c' + c.clienteId] && !conPedido[c.clienteId]; });
+    if (delDia.length) {
+      var nombreDia = ['domingos', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados'][new Date(a.fecha + 'T12:00:00').getDay()];
+      main.appendChild(el('h2', { text: 'Suelen recibir los ' + nombreDia }));
+      delDia.forEach(function (c) {
+        main.appendChild(el('button', { class: 'list-item', type: 'button', onclick: function () { agregarParada(c); } }, [
+          el('div', { class: 'row' }, [el('strong', { text: c.nombre }), el('span', { class: 'badge', text: 'Sumar' })]),
+          el('div', { class: 'small', text: c.direccion + ' · ' + nice(c.localidad) })
+        ]));
+      });
+      if (delDia.length > 1) main.appendChild(btn('Sumar a todos', 'secondary', function () {
+        delDia.forEach(function (c) { a.paradas.push(paradaArmar(c, null, a)); });
+        calcularArmar(!a.manual);
+        pintarArmar();
+      }, 'plus'));
     }
     var toca = a.leToca.filter(function (l) { return !elegidos['c' + l.clienteId]; });
     if (toca.length) {
@@ -3836,6 +3927,20 @@
       locSelect.appendChild(el('option', { value: '__otra', text: 'Otra…' }));
       var otherLoc = el('input', { class: 'input', placeholder: 'Escribí la localidad', hidden: true, 'aria-label': 'Otra localidad' });
       locSelect.addEventListener('change', function () { otherLoc.hidden = locSelect.value !== '__otra'; if (!otherLoc.hidden) otherLoc.focus(); });
+      var DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+      var diasElegidos = DIAS.filter(function (d) { return norm(c.dias).indexOf(norm(d)) !== -1; });
+      var diasChips = el('div', { class: 'chips dias-chips', role: 'group', 'aria-label': 'Días que recibe' });
+      DIAS.forEach(function (d) {
+        var chip = el('button', { class: 'chip', type: 'button', 'aria-pressed': String(diasElegidos.indexOf(d) !== -1), text: d, onclick: function () {
+          var i = diasElegidos.indexOf(d);
+          if (i === -1) diasElegidos.push(d); else diasElegidos.splice(i, 1);
+          chip.setAttribute('aria-pressed', String(i === -1));
+        } });
+        diasChips.appendChild(chip);
+      });
+      var diasBox = el('div', { class: 'field' }, [el('span', { text: 'Días que recibe' }), diasChips,
+        el('p', { class: 'small', style: 'margin:6px 0 0', text: 'Esos días la app te lo sugiere para el recorrido.' })]);
+      fields.dias = { get value() { return DIAS.filter(function (d) { return diasElegidos.indexOf(d) !== -1; }).join(', '); } };
       var err = el('div', { class: 'error-box', hidden: true });
       var saveBtn = btn('Guardar cliente', 'primary', function () {
         var loc = locSelect.value === '__otra' ? otherLoc.value : locSelect.value;
@@ -3856,6 +3961,9 @@
           S.catalog = null;
           if (onSaved) onSaved(res.clientId);
           else renderCliente(res.clientId);
+          if (!existing && !onSaved) {
+            openUbicar({ clientId: res.clientId, titulo: data.nombre, direccion: data.direccion + ', ' + nice(loc), auto: true, onSaved: function () { renderCliente(res.clientId); } });
+          }
         }, function (error) {
           unsetBusy(saveBtn);
           err.textContent = error.code === 'NETWORK' ? 'No pudimos confirmar que se guardó. Quedó en el teléfono: tocá Reintentar arriba.' : (error.message || 'No se pudo guardar.');
@@ -3871,7 +3979,7 @@
         field('telefono', 'Teléfono', { inputmode: 'tel', maxlength: '20' }),
         field('responsable', 'Persona de contacto', { maxlength: '80' }),
         el('div', { class: 'grid2' }, [field('desde', 'Recibe desde', { type: 'time' }), field('hasta', 'Hasta', { type: 'time' })]),
-        field('dias', 'Días que recibe', { maxlength: '40', placeholder: 'Ej: LUN A VIE' }),
+        diasBox,
         field('instrucciones', 'Indicaciones para entregar', { maxlength: '200' }),
         el('details', {}, [el('summary', { style: 'font-weight:700;min-height:44px;margin-top:14px;cursor:pointer', text: 'Más datos (opcional)' }),
           field('whatsappNumero', 'WhatsApp (si es otro número)', { inputmode: 'tel', maxlength: '20' }),
@@ -4046,7 +4154,7 @@
       }, function () { /* sin señal: queda lo último conocido */ });
     }
     renderOutbox();
-    go(WEB && !load('minue.guia', '') ? 'ayuda' : 'inicio');
+    go(WEB && !load('minue.guia2', '') ? 'ayuda' : 'inicio');
     if (outbox().length && navigator.onLine !== false) flushOutbox();
   }
   if (WEB) window.MINUE_START = start; else start();
