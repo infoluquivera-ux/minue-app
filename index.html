@@ -59,6 +59,7 @@
     --c-inverse-late-bg: #5A1F1F;
     --c-inverse-late-text: #FFD7D7;
     --c-brand-black: #000000;
+    --c-gold: linear-gradient(135deg, #F2D27A, #D9A93A 60%, #B9852A);
     --c-skeleton-a: var(--stone-200);
     --c-skeleton-b: var(--stone-100);
 
@@ -112,6 +113,36 @@
       --c-skeleton-b: var(--stone-700);
       --sh-md: 0 8px 24px rgba(0, 0, 0, .5);
     }
+  }
+
+  /* Pantalla clara para el sol: gana aunque el teléfono esté en modo oscuro */
+  :root[data-tema="claro"] {
+    --c-bg: var(--stone-100);
+    --c-surface: #FFFFFF;
+    --c-sunken: var(--stone-100);
+    --c-text: var(--stone-900);
+    --c-muted: var(--stone-600);
+    --c-border: var(--stone-200);
+    --c-control: var(--stone-500);
+    --c-action: var(--stone-900);
+    --c-action-press: var(--stone-700);
+    --c-on-action: var(--stone-50);
+    --c-accent: var(--amber-600);
+    --c-progress: var(--amber-700);
+    --c-accent-soft: var(--amber-100);
+    --c-on-accent-soft: var(--amber-900);
+    --c-success: var(--green-800);
+    --c-success-soft: var(--green-100);
+    --c-danger: var(--red-700);
+    --c-danger-soft: var(--red-100);
+    --c-warn: var(--amber-900);
+    --c-warn-soft: var(--amber-100);
+    --c-focus: var(--amber-700);
+    --c-scrim: rgba(28, 25, 23, .5);
+    --c-inverse-bg: var(--stone-900);
+    --c-skeleton-a: var(--stone-200);
+    --c-skeleton-b: var(--stone-100);
+    --sh-md: 0 8px 24px rgba(28, 25, 23, .16);
   }
 
   * { box-sizing: border-box; }
@@ -477,22 +508,66 @@
   .tuto-pie .tuto-puntos { margin: 2px 0 var(--sp-2); }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   @media (prefers-reduced-motion: reduce) { .tuto-btn.marcado { animation: none; } }
+
+  /* Auditoría UX: el botón Pedido vive en la barra inferior y nunca tapa contenido */
+  .drawer-nav { display: none; }
+  @media (max-width: 959px) {
+    .tabbar { grid-template-columns: 1fr 1fr 84px 1fr 1fr; }
+    .tab:nth-child(n+3) { grid-column: auto; }
+    .tab:nth-child(3) { grid-column: 4; }
+    .fab { left: 50%; right: auto; bottom: calc(env(safe-area-inset-bottom) + 5px); z-index: 31; transform: translateX(-50%); flex-direction: column; gap: 0; width: 80px; min-height: 58px; padding: 4px 0; border: 0; border-radius: 16px; background: var(--c-gold); color: var(--stone-900); font-size: 15px; box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
+    .fab:active { transform: translateX(-50%) scale(.96); }
+    main.with-fab { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px); }
+  }
+  .welcome-fila { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 var(--sp-3); }
 </style>
 
   <style>
-  .login { position: fixed; inset: 0; z-index: 70; overflow: auto; background: var(--c-brand-black); color: var(--c-inverse-text);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-4);
-    padding: calc(var(--sp-6) + env(safe-area-inset-top)) var(--sp-5) calc(var(--sp-6) + env(safe-area-inset-bottom)); text-align: center; }
+  /* MINUÉ · ingreso: negro y dorado de la marca, con un brillo lento detrás */
+  .login { position: fixed; inset: 0; z-index: 70; overflow: auto; isolation: isolate; background: var(--c-brand-black); color: var(--stone-50);
+    display: flex; align-items: center; justify-content: center;
+    padding: calc(var(--sp-5) + env(safe-area-inset-top)) var(--sp-4) calc(var(--sp-5) + env(safe-area-inset-bottom)); }
   .login[hidden] { display: none; }
-  .login h1 { font-size: var(--fs-title); margin: 0; }
-  .login-logo { border-radius: var(--r-xl); }
-  .login-msg { color: var(--c-inverse-text); background: var(--c-inverse-chip); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); margin: 0; width: 100%; max-width: 340px; }
-  .login-form { display: flex; flex-direction: column; gap: var(--sp-3); width: 100%; max-width: 340px; text-align: left; }
-  .login-field { display: flex; flex-direction: column; gap: var(--sp-1); font-weight: 600; }
-  .login-field input { min-height: var(--tap); border-radius: var(--r-md); border: 2px solid var(--c-inverse-border); background: var(--stone-50); color: var(--stone-900); padding: 0 var(--sp-3); font-size: 18px; }
-  .login-submit { min-height: var(--tap); border: 0; border-radius: var(--btn-radius); background: var(--stone-50); color: var(--stone-900); font-size: 18px; font-weight: 700; cursor: pointer; }
-  .login-submit:disabled { opacity: .7; }
-  .login-link { min-height: 48px; border: 0; background: none; color: var(--c-inverse-muted); text-decoration: underline; cursor: pointer; }
+  .login::before, .login::after { content: ''; position: fixed; z-index: -1; width: 90vmax; height: 90vmax; border-radius: 50%; pointer-events: none; filter: blur(40px); }
+  .login::before { top: -55vmax; left: -30vmax; background: radial-gradient(closest-side, rgba(224, 184, 76, .30), transparent); animation: login-brillo 16s ease-in-out infinite alternate; }
+  .login::after { bottom: -60vmax; right: -35vmax; background: radial-gradient(closest-side, rgba(180, 83, 9, .28), transparent); animation: login-brillo 20s ease-in-out infinite alternate-reverse; }
+  @keyframes login-brillo { to { transform: translate(8vmax, 6vmax) scale(1.12); } }
+  @keyframes login-sube { from { opacity: 0; transform: translateY(14px); } }
+  @keyframes login-sacude { 25% { transform: translateX(-7px); } 50% { transform: translateX(6px); } 75% { transform: translateX(-3px); } }
+  @keyframes login-gira { to { transform: rotate(360deg); } }
+
+  .login-card { width: 100%; max-width: 400px; display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); padding: var(--sp-5) var(--sp-5) var(--sp-6); text-align: center;
+    background: rgba(28, 25, 23, .62); border: 1px solid rgba(224, 184, 76, .24); border-radius: 28px; box-shadow: 0 24px 70px rgba(0, 0, 0, .55);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); animation: login-sube .5s var(--ease) both; }
+  .login-card.sacude { animation: login-sacude .35s var(--ease); }
+  .login-logo { width: 150px; height: auto; margin: var(--sp-1) 0 var(--sp-1); }
+  .login h1 { font-size: 30px; line-height: 1.15; letter-spacing: -.02em; margin: 0; }
+  .login-sub { margin: -6px 0 0; color: var(--stone-300); font-size: 17px; line-height: 1.35; }
+  .login-msg { width: 100%; margin: 0; padding: var(--sp-3); text-align: left; color: #FFE8B0; background: rgba(224, 184, 76, .14); border: 1px solid rgba(224, 184, 76, .4); border-radius: var(--r-md); overflow-wrap: anywhere; }
+  .login-form { display: flex; flex-direction: column; gap: var(--sp-3); width: 100%; margin-top: var(--sp-1); text-align: left; }
+
+  .login-field { display: flex; flex-direction: column; gap: 0; padding: 9px 14px 7px; border: 1.5px solid rgba(255, 255, 255, .2); border-radius: 16px; background: rgba(255, 255, 255, .07); cursor: text; transition: border-color var(--dur-quick) var(--ease), box-shadow var(--dur-quick) var(--ease), background-color var(--dur-quick) var(--ease); }
+  .login-field span { color: var(--stone-300); font-size: 15px; font-weight: 600; }
+  .login-field input { width: 100%; min-height: 34px; padding: 0; border: 0; outline: 0; background: transparent; color: var(--stone-50); font-size: 19px; font-weight: 500; }
+  .login-field:focus-within { border-color: #E0B84C; background: rgba(255, 255, 255, .1); box-shadow: 0 0 0 3px rgba(224, 184, 76, .28); }
+  .login-field input:-webkit-autofill, .login-field input:-webkit-autofill:focus { -webkit-text-fill-color: var(--stone-50); caret-color: var(--stone-50); -webkit-box-shadow: 0 0 0 40px #2A2622 inset; }
+  .login-clave { position: relative; }
+  .login-clave .login-field { padding-right: 58px; }
+  .login-ojo { position: absolute; top: 50%; right: 6px; width: 48px; height: 48px; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; border: 0; border-radius: 12px; background: none; color: var(--stone-200); cursor: pointer; }
+  .login-ojo svg { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .login-ojo[aria-pressed="true"] { color: #E0B84C; }
+  .login-caps { margin: -4px 0 0; color: #FFE8B0; font-size: 15px; font-weight: 600; }
+  .login-caps[hidden] { display: none; }
+
+  .login-submit { position: relative; min-height: 60px; margin-top: var(--sp-1); border: 0; border-radius: 16px; background: linear-gradient(135deg, #F2D27A, #D9A93A 55%, #B9852A); color: #1C1917; font-size: 19px; font-weight: 800; cursor: pointer; box-shadow: 0 10px 26px rgba(217, 169, 58, .28); transition: transform var(--dur-quick) var(--ease), filter var(--dur-quick) var(--ease); }
+  .login-submit:active { transform: scale(.98); }
+  .login-submit:disabled { filter: saturate(.7) brightness(.85); cursor: default; }
+  .login-submit.cargando::after { content: ''; position: absolute; top: 50%; right: 20px; width: 20px; height: 20px; margin-top: -10px; border: 3px solid rgba(28, 25, 23, .3); border-top-color: #1C1917; border-radius: 50%; animation: login-gira .7s linear infinite; }
+  .login-link { align-self: center; min-height: 44px; padding: 0 8px; border: 0; background: none; color: var(--stone-200); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .login-link:disabled { opacity: .6; }
+  .login :focus-visible { outline: 3px solid #E0B84C; outline-offset: 2px; }
+  .login-field input:focus-visible { outline: 0; }
+  @media (max-width: 380px) { .login-card { padding: var(--sp-4); border-radius: 24px; } .login-logo { width: 124px; } }
 </style>
 </head>
 <body>
@@ -546,16 +621,17 @@
     </div>
     <nav class="drawer-nav" aria-label="Secciones del menú">
       <button type="button" class="drawer-item" data-go="inicio" aria-label="Hoy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Hoy</span></button>
-      <button type="button" class="drawer-item" data-go="armar" aria-label="Armar recorrido"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/></svg><span>Armar recorrido</span></button>
       <button type="button" class="drawer-item" data-go="pedidos" aria-label="Pedidos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg><span>Pedidos</span></button>
       <button type="button" class="drawer-item" data-go="clientes" aria-label="Clientes"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg><span>Clientes</span></button>
       <button type="button" class="drawer-item" data-go="cobros" aria-label="Plata"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg><span>Plata</span></button>
     </nav>
     <div class="drawer-group">
+      <button type="button" class="drawer-item" data-go="armar" aria-label="Armar recorrido"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/></svg><span>Armar recorrido</span></button>
       <button id="menu-panel" type="button" class="drawer-item" data-go="panel" aria-label="Panel" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V5M19 20v-6"/></svg><span>Panel</span></button>
       <button id="menu-catalogo" type="button" class="drawer-item" data-go="catalogo" aria-label="Catálogo" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8l8-4 8 4v9l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v9"/></svg><span>Catálogo</span></button>
       <button id="menu-ajustes" type="button" class="drawer-item" data-go="ajustes" aria-label="Ajustes" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>Ajustes</span></button>
       <button type="button" class="drawer-item" data-go="ayuda" aria-label="Cómo usar la app"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.8M12 17h.01"/></svg><span>Cómo usar la app</span></button>
+      <button id="tema" type="button" class="drawer-item" aria-label="Cambiar el brillo de la pantalla"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/></svg><span id="tema-label">Pantalla clara para el sol</span></button>
       <button id="zoom" type="button" class="drawer-item" aria-label="Cambiar el tamaño de la letra"><span class="drawer-aa" aria-hidden="true">Aa</span><span id="zoom-label">Letra normal</span></button>
       <button id="logout" type="button" class="drawer-item" aria-label="Salir" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5M15 8l4 4-4 4M19 12H9"/></svg><span>Salir</span></button>
     </div>
@@ -566,7 +642,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <div id="user-name" data-name="" hidden></div>
-  <script>window.MINUE_WEB = {"url":"https://pzxpquklyajfngzmkgmn.supabase.co","key":"sb_publishable_Pgru1rJz2jWEulxUIRuzzg__2FKjSuk"};</script>
+  <script>window.MINUE_WEB = {"url":"https://pzxpquklyajfngzmkgmn.supabase.co","key":"sb_publishable_Pgru1rJz2jWEulxUIRuzzg__2FKjSuk","admin":"infoluquivera@gmail.com","volver":"https://infoluquivera-ux.github.io/minue-app"};</script>
 <script>/*
  * MINUÉ · orden del recorrido. Corre en el teléfono con los datos de app.recorrido_datos().
  * Orden APROXIMADO (no usa tráfico ni calles reales):
@@ -932,6 +1008,7 @@
 
   var TZ = 'America/Argentina/Buenos_Aires';
   var S = { tab: 'inicio', catalog: null, renderId: 0 };
+  try { if (JSON.parse(localStorage.getItem('minue.tema') || '""') === 'claro') document.documentElement.setAttribute('data-tema', 'claro'); } catch (e) { /* sin almacenamiento */ }
   var main = document.getElementById('main');
   var userEl = document.getElementById('user-name');
   var USER = (userEl && userEl.getAttribute('data-name')) || '';
@@ -1600,8 +1677,10 @@
     var done = r.entregadasHoy;
     var total = r.restantes + r.ocultas + done;
 
-    main.appendChild(el('p', { class: 'welcome', text: 'Bienvenido' + (d.user ? ' ' + capital(d.user) : '') }));
-    main.appendChild(el('p', { class: 'greet', text: capital(d.hoyTexto) }));
+    main.appendChild(el('div', { class: 'welcome-fila' }, [
+      el('p', { class: 'welcome', text: 'Bienvenido' + (d.user ? ' ' + capital(d.user) : '') }),
+      el('p', { class: 'greet', text: capital(d.hoyTexto) })
+    ]));
     main.appendChild(el('h1', { text: total ? 'Hoy llevás ' + done + ' de ' + total : 'Hoy no tenés entregas' }));
     if (total) {
       main.appendChild(el('div', { class: 'bar', role: 'progressbar', 'aria-label': 'Entregas de hoy',
@@ -1609,6 +1688,7 @@
         [el('i', { style: 'width:' + Math.round(done / total * 100) + '%' })]));
     }
     if (d.atrasadas > 0) main.appendChild(el('p', { class: 'late-line', text: d.atrasadas + (d.atrasadas === 1 ? ' entrega atrasada' : ' entregas atrasadas') }));
+    function resumenDia() {
     main.appendChild(el('div', { class: 'pills' }, [pill('Cobrado hoy', money(d.cobradoHoy)), pill('Te deben en la ruta', money(r.aCobrar))]));
     var resumen = r.plan && r.plan.resumen && r.plan.resumen.regreso
       ? 'Salida ' + r.plan.salida + ' · volvés ' + r.plan.resumen.regreso + ' · ' + String(r.plan.resumen.km).replace('.', ',') + ' km (aproximado)' : '';
@@ -1616,6 +1696,7 @@
       resumen ? el('p', { class: 'small', text: resumen }) : null,
       btn(r.plan ? 'Cambiar el recorrido' : 'Armar el recorrido', 'ghost', function () { go('armar'); }, 'route')
     ]));
+    }
 
     if (!r.stops.length) {
       main.appendChild(el('div', { class: 'card empty' }, [
@@ -1629,6 +1710,7 @@
           linkBtn(r.volverBaseUrl, 'Volver a la base', 'secondary', 'home')
         ]));
       }
+      resumenDia();
       return;
     }
 
@@ -1639,6 +1721,7 @@
       heroWrap.appendChild(heroCard(r.stops[0], r, paintHero));
     }
     paintHero();
+    resumenDia();
 
     if (r.stops.length > 1) {
       main.appendChild(el('h2', { text: 'Después' }));
@@ -2079,7 +2162,7 @@
         ['Atrasados', d.pedidos.filter(function (p) { return !p.entregado && p.fecha < today; })],
         ['Para hoy', d.pedidos.filter(function (p) { return !p.entregado && p.fecha === today; })],
         ['Próximos días', d.pedidos.filter(function (p) { return !p.entregado && p.fecha > today; })],
-        ['Entregados que deben o de hoy', d.pedidos.filter(function (p) { return p.entregado; })]
+        ['Entregados de hoy o con deuda', d.pedidos.filter(function (p) { return p.entregado; })]
       ];
       var any = false;
       groups.forEach(function (g) {
@@ -2293,7 +2376,7 @@
   /** "12 % más que del 1 al 5 oct": solo si hay contra qué comparar. */
   function comparar(actual, antes, a) {
     var base = Number(antes);
-    if (!(base > 0)) return 'Sin ventas en el tramo anterior';
+    if (!(base > 0)) return 'Sin ventas en el período anterior';
     var cambio = Math.round((Number(actual) - base) / base * 100);
     var tramo = dayLabel(a.desde) + ' a ' + dayLabel(a.hasta);
     if (cambio === 0) return 'Igual que ' + tramo;
@@ -2633,10 +2716,19 @@
       main.appendChild(zona);
       main.appendChild(el('h2', { text: 'Usuarios' }));
       a.usuarios.forEach(function (u) {
+        var enlace = el('button', { class: 'btn ghost', type: 'button', text: 'Mandar enlace para contraseña nueva' });
+        enlace.addEventListener('click', function () {
+          setBusy(enlace, 'Mandando…');
+          window.MINUE_AUTH.enviarEnlace(u.correo).then(function (ok) {
+            unsetBusy(enlace);
+            toast(ok ? 'Listo. A ' + u.nombre + ' le llega un correo para elegir la contraseña.' : 'No se pudo mandar. Esperá un rato y probá de nuevo.', { error: !ok });
+          }, function () { unsetBusy(enlace); toast('No hay señal.', { error: true }); });
+        });
         main.appendChild(el('div', { class: 'card' }, [
           el('strong', { text: u.nombre }),
           el('div', { class: 'small', text: u.correo }),
-          el('div', { class: 'small', text: (u.rol === 'admin' ? 'Administrador' : 'Repartidor') + (u.activo ? '' : ' · sin acceso') })
+          el('div', { class: 'small', text: (u.rol === 'admin' ? 'Administrador' : 'Repartidor') + (u.activo ? '' : ' · sin acceso') }),
+          window.MINUE_AUTH ? enlace : null
         ]));
       });
     }, function (e) { showError(e, renderAjustes); });
@@ -3876,6 +3968,15 @@
   if (zoomIndex < 0 || zoomIndex >= ZOOMS.length) zoomIndex = 0;
   document.documentElement.style.setProperty('--zoom', String(ZOOMS[zoomIndex]));
   function zoomText() { return zoomIndex === 0 ? 'Letra normal' : zoomIndex === 1 ? 'Letra más grande' : 'Letra muy grande'; }
+  function temaTexto() { return document.documentElement.getAttribute('data-tema') === 'claro' ? 'Pantalla oscura' : 'Pantalla clara para el sol'; }
+  document.getElementById('tema-label').textContent = temaTexto();
+  document.getElementById('tema').addEventListener('click', function () {
+    var claro = document.documentElement.getAttribute('data-tema') !== 'claro';
+    if (claro) document.documentElement.setAttribute('data-tema', 'claro');
+    else document.documentElement.removeAttribute('data-tema');
+    store('minue.tema', claro ? 'claro' : '');
+    document.getElementById('tema-label').textContent = temaTexto();
+  });
   document.getElementById('zoom-label').textContent = zoomText();
   document.getElementById('zoom').addEventListener('click', function () {
     zoomIndex = (zoomIndex + 1) % ZOOMS.length;
@@ -4005,18 +4106,23 @@
     return n;
   }
 
-  function frame(title, message) {
+  var card = null;
+
+  function frame(title, message, subtitle) {
     if (!overlay) {
       overlay = node('div', { id: 'login', class: 'login', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'login-title' });
       document.body.appendChild(overlay);
     }
     while (overlay.firstChild) overlay.removeChild(overlay.firstChild);
     overlay.hidden = false;
-    overlay.appendChild(node('img', { class: 'login-logo', alt: 'MINUÉ', width: '120', height: '120', src: 'icon-192.png' }));
-    overlay.appendChild(node('h1', { id: 'login-title' }, title));
+    card = node('div', { class: 'login-card' });
+    overlay.appendChild(card);
+    card.appendChild(node('img', { class: 'login-logo', alt: 'MINUÉ', src: 'logo-login.png' }));
+    card.appendChild(node('h1', { id: 'login-title' }, title));
+    if (subtitle) card.appendChild(node('p', { class: 'login-sub' }, subtitle));
     var note = node('p', { class: 'login-msg', role: 'alert' }, message || '');
     note.hidden = !message;
-    overlay.appendChild(note);
+    card.appendChild(note);
     return note;
   }
 
@@ -4029,6 +4135,49 @@
     return input;
   }
 
+  var OJO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var OJO_TACHADO = OJO.replace('</svg>', '<path d="M4 4l16 16"/></svg>');
+
+  /** Contraseña con ojito para verla y aviso de mayúsculas activadas. */
+  function passwordField(form, label, attrs) {
+    var input = field(form, label, attrs);
+    var box = input.parentNode;
+    box.classList.add('con-ojo');
+    var eye = node('button', { type: 'button', class: 'login-ojo', 'aria-label': 'Mostrar contraseña', 'aria-pressed': 'false' });
+    eye.innerHTML = OJO;
+    // Afuera del <label>: si no, tocar el ojito también enfocaría el campo dos veces.
+    var wrap = node('div', { class: 'login-clave' });
+    form.replaceChild(wrap, box);
+    wrap.appendChild(box);
+    wrap.appendChild(eye);
+    var caps = node('p', { class: 'login-caps', 'aria-live': 'polite' });
+    caps.hidden = true;
+    form.appendChild(caps);
+    function mostrar(si) {
+      input.type = si ? 'text' : 'password';
+      eye.innerHTML = si ? OJO_TACHADO : OJO;
+      eye.setAttribute('aria-pressed', String(si));
+      eye.setAttribute('aria-label', si ? 'Ocultar contraseña' : 'Mostrar contraseña');
+    }
+    eye.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    eye.addEventListener('click', function () { mostrar(input.type === 'password'); input.focus(); });
+    input.addEventListener('keyup', function (e) {
+      if (!e.getModifierState) return;
+      var activas = e.getModifierState('CapsLock');
+      caps.hidden = !activas;
+      caps.textContent = activas ? 'Las mayúsculas están activadas.' : '';
+    });
+    input.ocultar = function () { mostrar(false); };
+    return input;
+  }
+
+  function sacudir() {
+    if (!card) return;
+    card.classList.remove('sacude');
+    void card.offsetWidth;
+    card.classList.add('sacude');
+  }
+
   function submitButton(form, text) {
     var button = node('button', { type: 'submit', class: 'login-submit' }, text);
     form.appendChild(button);
@@ -4037,21 +4186,23 @@
 
   function busy(button, on, text) {
     button.disabled = on;
+    button.classList.toggle('cargando', on);
     button.textContent = text;
   }
 
   function showLogin(message) {
-    var note = frame('Entrá a MINUÉ', message);
+    var conocido = recordado();
+    var note = frame(conocido ? 'Hola de nuevo' : 'Bienvenido', message, 'Tu reparto del día, en un solo lugar.');
     var form = node('form', { class: 'login-form' });
-    var email = field(form, 'Correo', { type: 'email', autocomplete: 'username', inputmode: 'email', required: 'required' });
-    if (session && session.email) email.value = session.email;
-    var pass = field(form, 'Contraseña', { type: 'password', autocomplete: 'current-password', required: 'required' });
-    var button = submitButton(form, 'Entrar');
+    var email = field(form, 'Correo', { type: 'email', autocomplete: 'username', inputmode: 'email', autocapitalize: 'none', spellcheck: 'false', required: 'required' });
+    if (conocido) email.value = conocido;
+    var pass = passwordField(form, 'Contraseña', { type: 'password', autocomplete: 'current-password', required: 'required' });
     var forgot = node('button', { type: 'button', class: 'login-link' }, 'Olvidé mi contraseña');
     form.appendChild(forgot);
-    overlay.appendChild(form);
+    var button = submitButton(form, 'Entrar');
+    card.appendChild(form);
 
-    function say(text) { note.textContent = text; note.hidden = false; }
+    function say(text) { note.textContent = text; note.hidden = false; sacudir(); }
 
     form.addEventListener('submit', function (e) {
       e.preventDefault();
@@ -4059,10 +4210,16 @@
       auth('token?grant_type=password', { email: email.value.trim(), password: pass.value }).then(function (res) {
         return res.json().then(function (data) {
           busy(button, false, 'Entrar');
-          if (!res.ok) return say(res.status === 429 ? 'Demasiados intentos. Esperá unos minutos.' : 'El correo o la contraseña no son correctos.');
+          if (!res.ok) {
+            pass.value = '';
+            pass.focus();
+            return say(res.status === 429 ? 'Demasiados intentos. Esperá unos minutos.' : 'El correo o la contraseña no son correctos.');
+          }
           clearCache();
           keep(data);
+          recordar(email.value.trim());
           pass.value = '';
+          pass.ocultar();
           overlay.hidden = true;
           if (started) location.reload(); else startApp();
         });
@@ -4072,23 +4229,60 @@
       });
     });
 
-    forgot.addEventListener('click', function () {
-      var value = email.value.trim();
-      if (!value) return say('Escribí tu correo y tocá de nuevo.');
-      auth('recover', { email: value }).then(function (res) {
-        say(res.ok ? 'Si el correo existe, te llegó un mensaje para cambiar la contraseña.' : 'No pudimos mandar el mensaje. Probá más tarde.');
-      }).catch(function () { say('No hay señal. Probá de nuevo.'); });
-    });
+    forgot.addEventListener('click', function () { showForgot(email.value.trim()); });
     setTimeout(function () { (email.value ? pass : email).focus(); }, 30);
+  }
+
+  function enviarEnlace(correo) {
+    return auth('recover?redirect_to=' + encodeURIComponent(cfg.volver || location.origin + location.pathname), { email: correo }).then(function (res) { return res.ok; });
+  }
+
+  /** Olvidó la contraseña: le avisa al administrador, que le manda el enlace. También puede pedirlo directo. */
+  function showForgot(correo) {
+    var note = frame('¿Olvidaste tu contraseña?', '', 'Avisale al administrador y te manda un correo para elegir una nueva.');
+    var form = node('form', { class: 'login-form' });
+    var email = field(form, 'Tu correo', { type: 'email', autocomplete: 'username', inputmode: 'email', autocapitalize: 'none', spellcheck: 'false', required: 'required' });
+    email.value = correo || '';
+    var button = submitButton(form, 'Avisar al administrador');
+    var directo = node('button', { type: 'button', class: 'login-link' }, 'Prefiero recibir el enlace en mi correo');
+    var volver = node('button', { type: 'button', class: 'login-link' }, 'Volver');
+    form.appendChild(directo);
+    form.appendChild(volver);
+    card.appendChild(form);
+
+    function say(text, error) {
+      note.textContent = text;
+      note.hidden = false;
+      if (error) sacudir();
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var quien = email.value.trim();
+      var cuerpo = 'Hola. Olvidé mi contraseña de MINUÉ. Mi correo es ' + quien + '.\n\nPara mandarme el enlace: entrá a la app, Ajustes, Usuarios, Mandar enlace.';
+      location.href = 'mailto:' + (cfg.admin || '') + '?subject=' + encodeURIComponent('MINUÉ: necesito una contraseña nueva') + '&body=' + encodeURIComponent(cuerpo);
+      say('Se abrió tu correo con el mensaje listo. Tocá Enviar. Si no se abrió, escribile a ' + (cfg.admin || 'el administrador') + '.');
+    });
+    directo.addEventListener('click', function () {
+      var quien = email.value.trim();
+      if (!quien) return say('Escribí tu correo.', true);
+      directo.disabled = true;
+      enviarEnlace(quien).then(function (ok) {
+        directo.disabled = false;
+        say(ok ? 'Si el correo existe, te llegó un mensaje. Revisá también el correo no deseado.' : 'No pudimos mandar el mensaje. Probá más tarde.', !ok);
+      }).catch(function () { directo.disabled = false; say('No hay señal. Probá de nuevo.', true); });
+    });
+    volver.addEventListener('click', function () { showLogin(); });
+    setTimeout(function () { (email.value ? button : email).focus(); }, 30);
   }
 
   /** Viene del enlace del correo de recuperación: pide la contraseña nueva. */
   function showRecovery(token) {
-    var note = frame('Elegí una contraseña nueva');
+    var note = frame('Elegí una contraseña nueva', '', 'Usá al menos 12 caracteres.');
     var form = node('form', { class: 'login-form' });
-    var pass = field(form, 'Contraseña nueva', { type: 'password', autocomplete: 'new-password', minlength: '12', required: 'required' });
+    var pass = passwordField(form, 'Contraseña nueva', { type: 'password', autocomplete: 'new-password', minlength: '12', required: 'required' });
     var button = submitButton(form, 'Guardar contraseña');
-    overlay.appendChild(form);
+    card.appendChild(form);
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       busy(button, true, 'Guardando…');
@@ -4111,11 +4305,21 @@
     });
   }
 
+  function recordado() {
+    if (session && session.email) return session.email;
+    try { return localStorage.getItem('minue.correo') || ''; } catch (e) { return ''; }
+  }
+
+  function recordar(correo) {
+    try { localStorage.setItem('minue.correo', correo); } catch (e) { /* sin almacenamiento */ }
+  }
+
   function clearCache() {
     try { localStorage.removeItem('minue.cache.v2'); } catch (e) { /* sin almacenamiento */ }
   }
 
   window.MINUE_AUTH = {
+    enviarEnlace: enviarEnlace,
     getToken: function () {
       if (fresh()) return Promise.resolve(session.access);
       if (navigator.onLine === false) return Promise.reject({ code: 'NETWORK', message: 'No hay conexión.' });
