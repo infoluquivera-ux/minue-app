@@ -537,6 +537,24 @@
   .dias-chips .chip { padding: 8px 2px; }
   .tuto-mapa { position: relative; height: 110px; border-radius: 12px; background: repeating-linear-gradient(35deg, var(--c-sunken) 0 18px, var(--c-border) 18px 20px); }
   .tuto-mapa span { position: absolute; left: 50%; top: 50%; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; margin: -15px; border-radius: 50%; background: var(--c-progress); color: var(--stone-900); font-weight: 800; }
+
+  /* Productos */
+  .prod-foto { flex: 0 0 64px; display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 12px; overflow: hidden; background: var(--c-sunken); color: var(--c-muted); }
+  .prod-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .prod-foto svg { width: 30px; height: 30px; }
+  .prod-foto.grande { width: 100%; height: 190px; margin-bottom: var(--sp-3); }
+  .prod-foto.grande svg { width: 56px; height: 56px; }
+  .prod-fila { display: flex; gap: 12px; align-items: center; }
+  .prod-datos { flex: 1; min-width: 0; }
+  .product-cabeza { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+  .product-cabeza .prod-foto { flex-basis: 52px; width: 52px; height: 52px; }
+  .sheet h3 { margin: 16px 0 2px; font-size: 1rem; }
+  @media (max-width: 959px) {
+    .tab[data-tab="cobros"] { display: none; }
+    .tabbar { grid-template-columns: 1fr 1fr 74px 1fr 1fr; }
+    .fab { width: 72px; }
+  }
+  @media (min-width: 960px) { .solo-cel { display: none; } }
 </style>
 
   <style>
@@ -619,6 +637,10 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>
       <span>Clientes</span>
     </button>
+    <button type="button" data-tab="catalogo" class="tab">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8l8-4 8 4v9l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v9"/></svg>
+      <span>Productos</span>
+    </button>
     <button type="button" data-tab="cobros" class="tab">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>
       <span>Plata</span>
@@ -643,9 +665,9 @@
       <button type="button" class="drawer-item" data-go="cobros" aria-label="Plata"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg><span>Plata</span></button>
     </nav>
     <div class="drawer-group">
+      <button type="button" class="drawer-item solo-cel" data-go="cobros" aria-label="Plata"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg><span>Plata</span></button>
       <button type="button" class="drawer-item" data-go="armar" aria-label="Armar recorrido"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/></svg><span>Armar recorrido</span></button>
       <button id="menu-panel" type="button" class="drawer-item" data-go="panel" aria-label="Panel" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V5M19 20v-6"/></svg><span>Panel</span></button>
-      <button id="menu-catalogo" type="button" class="drawer-item" data-go="catalogo" aria-label="Catálogo" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8l8-4 8 4v9l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v9"/></svg><span>Catálogo</span></button>
       <button id="menu-ajustes" type="button" class="drawer-item" data-go="ajustes" aria-label="Ajustes" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>Ajustes</span></button>
       <button type="button" class="drawer-item" data-go="ayuda" aria-label="Cómo usar la app"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.8M12 17h.01"/></svg><span>Cómo usar la app</span></button>
       <button id="tema" type="button" class="drawer-item" aria-label="Cambiar el brillo de la pantalla"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/></svg><span id="tema-label">Pantalla clara para el sol</span></button>
@@ -1062,6 +1084,7 @@
     var paths = {
       map: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
       check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+      box: '<path d="M4 8l8-4 8 4v9l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v9"/>',
       cash: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>',
       plus: '<path d="M12 5v14M5 12h14"/>',
       phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
@@ -1713,7 +1736,8 @@
       ? 'Salida ' + r.plan.salida + ' · volvés ' + r.plan.resumen.regreso + ' · ' + String(r.plan.resumen.km).replace('.', ',') + ' km (aproximado)' : '';
     main.appendChild(el('div', { class: 'plan-acceso' }, [
       resumen ? el('p', { class: 'small', text: resumen }) : null,
-      btn(r.plan ? 'Cambiar el recorrido' : 'Armar el recorrido', 'ghost', function () { go('armar'); }, 'route')
+      btn(r.plan ? 'Cambiar el recorrido' : 'Armar el recorrido', 'ghost', function () { go('armar'); }, 'route'),
+      btn('Ver la plata', 'ghost', function () { go('cobros'); }, 'cash')
     ]));
     }
 
@@ -2480,7 +2504,7 @@
       el('div', { class: 'hero-kicker', text: 'Facturación para MINUÉ' }),
       el('div', { class: 'panel-big', text: money(a.facturacion) }),
       el('div', { class: 'hero-addr', text: comparar(a.facturacion, d.anterior.facturacion, d.anterior) }),
-      el('div', { class: 'hero-kicker panel-gap', text: S.rol === 'admin' ? 'Comisión de Daniel (estimada)' : 'Tu comisión (estimada)' }),
+      el('div', { class: 'hero-kicker panel-gap', text: 'Comisión (estimada)' }),
       el('div', { class: 'panel-big', text: money(a.comision) }),
       el('div', { class: 'hero-addr', text: comparar(a.comision, d.anterior.comision, d.anterior) })
     ]));
@@ -2546,24 +2570,25 @@
 
   function renderCatalogo() {
     S.current = renderCatalogo;
-    setFab(false);
     loading();
+    cargarFotos();
     call('productos').then(function (d) {
       clear(main);
-      main.appendChild(el('h1', { text: 'Catálogo' }));
-      main.appendChild(el('p', { class: 'sub', text: 'Comisión general: ' + String(d.comisionGeneral).replace('.', ',') + ' %. Se usa en los productos sin comisión propia.' }));
-      if (S.rol === 'admin') {
-        main.appendChild(el('div', { class: 'stack' }, [
-          btn('Nuevo producto', 'secondary', function () { openProductoForm(null); }, 'plus'),
-          btn('Aumentar precios', 'secondary', function () { openAumento(d); })
-        ]));
-      }
+      main.appendChild(el('h1', { text: 'Productos' }));
+      main.appendChild(el('div', { class: 'stack' }, [
+        btn('Nuevo producto', 'primary', function () { openProductoForm(null); }, 'plus'),
+        d.productos.length ? btn('Aumentar precios', 'secondary', function () { openAumento(d); }) : null
+      ]));
       var lista = el('div', { style: 'margin-top:12px' });
       d.productos.forEach(function (p) {
-        lista.appendChild(el('button', { class: 'list-item', type: 'button', onclick: function () { openProducto(p); } }, [
-          el('div', { class: 'row' }, [el('strong', { text: p.nombre }), p.activo ? null : el('span', { class: 'badge', text: 'Inactivo' })]),
-          el('div', { class: 'small', text: 'Caja ' + money(p.precios.CAJA) + ' · Bulto ' + money(p.precios.BULTO) }),
-          el('div', { class: 'small', text: 'Comisión por caja ' + money(p.comisiones.CAJA) + ' · por bulto ' + money(p.comisiones.BULTO) })
+        var precios = [['Unidad', 'UNIDAD'], ['Caja', 'CAJA'], ['Bulto', 'BULTO']].filter(function (x) { return p.precios[x[1]] > 0; })
+          .map(function (x) { return x[0] + ' ' + money(p.precios[x[1]]); }).join(' · ');
+        lista.appendChild(el('button', { class: 'list-item prod-fila', type: 'button', onclick: function () { openProducto(p); } }, [
+          fotoProducto(p),
+          el('div', { class: 'prod-datos' }, [
+            el('div', { class: 'row' }, [el('strong', { text: p.nombre }), p.activo ? null : el('span', { class: 'badge', text: 'No se vende' })]),
+            el('div', { class: 'small', text: precios })
+          ])
         ]));
       });
       if (!d.productos.length) lista.appendChild(el('div', { class: 'card empty' }, [el('strong', { text: 'Todavía no hay productos' }), el('span', { text: 'Tocá Nuevo producto para cargar el primero.' })]));
@@ -2577,12 +2602,13 @@
       return row(nombre + ' · ' + money(p.precios[clave]), 'Comisión ' + money(p.comisiones[clave]), true);
     }
     var acciones = el('div', { class: 'stack', style: 'margin-top:14px' });
-    if (S.rol === 'admin') acciones.appendChild(btn('Editar producto', 'primary', function () { openProductoForm(p); }));
+    acciones.appendChild(btn('Editar producto', 'primary', function () { openProductoForm(p); }));
     acciones.appendChild(btn('Cerrar', 'secondary', closeSheet));
     openSheet([
+      fotoProducto(p, 'grande'),
       el('h2', { text: p.nombre }),
       p.sabor ? el('p', { class: 'small', style: 'margin-top:0', text: p.sabor }) : null,
-      el('div', { class: 'summary' }, [fila('Unidad', 'UNIDAD'), fila('Caja', 'CAJA'), fila('Bulto', 'BULTO')]),
+      el('div', { class: 'summary' }, [['Unidad', 'UNIDAD'], ['Caja', 'CAJA'], ['Bulto', 'BULTO']].filter(function (x) { return p.precios[x[1]] > 0; }).map(function (x) { return fila(x[0], x[1]); })),
       el('div', { class: 'summary' }, [
         row('Unidades por caja', String(p.unidadesPorCaja)), row('Cajas por bulto', String(p.cajasPorBulto)),
         row('Alfajores por bulto', String(p.unidadesPorBulto)),
@@ -2602,7 +2628,7 @@
   }
 
   function openProductoForm(p) {
-    var v = p || { nombre: '', sabor: '', categoria: 'Alfajor', unidadesPorCaja: '', cajasPorBulto: '', precios: { UNIDAD: '', CAJA: '', BULTO: '' }, comision: null, activo: true };
+    var v = p || { id: 'nuevo', nombre: '', sabor: '', categoria: 'Alfajor', unidadesPorCaja: '', cajasPorBulto: '', precios: { UNIDAD: '', CAJA: '', BULTO: '' }, comision: null, activo: true };
     function campo(texto, valor, attrs) {
       var input = el('input', Object.assign({ class: 'input', value: valor === null || valor === undefined ? '' : String(valor), 'aria-label': texto }, attrs || {}));
       return { input: input, nodo: el('label', { class: 'field' }, [el('span', { text: texto }), input]) };
@@ -2628,23 +2654,59 @@
     var error = el('div', { class: 'error-box', hidden: true });
     var save = el('button', { class: 'btn primary', type: 'button', text: 'Guardar producto' });
     var requestId = uuid();
+    var fotoActual = (S.fotos && S.fotos[v.id]) || '';
+    var fotoNueva = null;
+    var fotoCaja = el('div', { class: 'prod-foto grande' });
+    var archivo = el('input', { type: 'file', accept: 'image/*', class: 'sr-only', 'aria-label': 'Elegir foto del producto' });
+    var fotoBotones = el('div', { class: 'btn-row' });
+    function drawFoto() {
+      var src = fotoNueva !== null ? fotoNueva : fotoActual;
+      clear(fotoCaja);
+      fotoCaja.appendChild(src ? el('img', { src: src, alt: 'Foto del producto' }) : icon('box'));
+      clear(fotoBotones);
+      fotoBotones.appendChild(btn(src ? 'Cambiar foto' : 'Agregar foto', 'secondary', function () { archivo.click(); }));
+      if (src) fotoBotones.appendChild(btn('Quitar foto', 'ghost', function () { fotoNueva = ''; drawFoto(); }));
+    }
+    drawFoto();
+    archivo.addEventListener('change', function () {
+      if (!archivo.files[0]) return;
+      error.hidden = true;
+      achicarFoto(archivo.files[0]).then(function (dato) { fotoNueva = dato; drawFoto(); }, function () {
+        error.textContent = 'No pudimos usar esa foto. Probá con otra.';
+        error.hidden = false;
+      });
+      archivo.value = '';
+    });
     save.addEventListener('click', function () {
       error.hidden = true;
       setBusy(save, 'Guardando…');
       write('guardarProducto', { requestId: requestId, productId: p ? p.id : '', rev: p ? p.rev : '', producto: {
         nombre: nombre.input.value, sabor: sabor.input.value, categoria: categoria.input.value,
-        unidadesPorCaja: porCaja.input.value, cajasPorBulto: porBulto.input.value, precioUnidad: unidad.input.value,
-        precioCaja: caja.input.value, precioBulto: bulto.input.value, comision: comision.input.value, activo: activo
-      } }, 'Guardar producto').then(function () { afterFix(p ? 'Producto actualizado.' : 'Producto creado.'); }, function (e) {
+        unidadesPorCaja: porCaja.input.value || 1, cajasPorBulto: porBulto.input.value || 1, precioUnidad: unidad.input.value || 0,
+        precioCaja: caja.input.value || 0, precioBulto: bulto.input.value || 0, comision: comision.input.value, activo: activo
+      } }, 'Guardar producto').then(function (r) {
+        S.catalog = null;
+        var id = r.productId || r.entity;
+        if (fotoNueva === null) return null;
+        return write('guardarFoto', { productId: id, foto: fotoNueva }, 'Foto de ' + nombre.input.value).then(function () {
+          S.fotos = S.fotos || {};
+          if (fotoNueva) S.fotos[id] = fotoNueva; else delete S.fotos[id];
+        });
+      }).then(function () { afterFix(p ? 'Producto actualizado.' : 'Producto creado.'); }, function (e) {
         unsetBusy(save);
         requestId = uuid();
         error.textContent = e.code === 'NETWORK' ? 'No hay señal. Quedó arriba para reintentar.' : e.message || 'No se pudo guardar.';
         error.hidden = false;
       });
     });
-    openSheet([el('h2', { text: p ? 'Editar producto' : 'Nuevo producto' }), nombre.nodo, sabor.nodo, categoria.nodo, porCaja.nodo, porBulto.nodo,
-      unidad.nodo, caja.nodo, bulto.nodo, comision.nodo,
-      el('p', { class: 'small', text: 'Dejá la comisión vacía para usar la general. Las ventas ya hechas no cambian.' }),
+    openSheet([el('h2', { text: p ? 'Editar producto' : 'Nuevo producto' }), fotoCaja, archivo, fotoBotones, nombre.nodo,
+      el('h3', { text: 'Cómo se vende' }),
+      el('p', { class: 'small', text: 'Poné el precio de lo que vendés. Dejá vacío lo que no.' }),
+      el('div', { class: 'grid2' }, [unidad.nodo, el('div')]),
+      el('div', { class: 'grid2' }, [caja.nodo, porCaja.nodo]),
+      el('div', { class: 'grid2' }, [bulto.nodo, porBulto.nodo]),
+      el('details', {}, [el('summary', { style: 'font-weight:700;min-height:44px;margin-top:10px;cursor:pointer', text: 'Más datos (opcional)' }), sabor.nodo, categoria.nodo, comision.nodo,
+        el('p', { class: 'small', text: 'Dejá la comisión vacía para usar la general. Las ventas ya hechas no cambian.' })]),
       el('div', { class: 'field' }, [el('span', { text: 'Estado' }), activoBox]), error,
       el('div', { class: 'stack', style: 'margin-top:14px' }, [save, btn('Volver', 'secondary', closeSheet)])
     ], p ? 'Editar producto' : 'Nuevo producto');
@@ -2785,11 +2847,59 @@
         main.appendChild(el('div', { class: 'card' }, [
           el('strong', { text: u.nombre }),
           el('div', { class: 'small', text: u.correo }),
-          el('div', { class: 'small', text: (u.rol === 'admin' ? 'Administrador' : 'Repartidor') + (u.activo ? '' : ' · sin acceso') }),
+          u.activo ? null : el('div', { class: 'small', text: 'Sin acceso' }),
           window.MINUE_AUTH ? enlace : null
         ]));
       });
     }, function (e) { showError(e, renderAjustes); });
+  }
+
+  /* ---------------- Fotos de productos ---------------- */
+
+  function ponerFoto(caja) {
+    var id = caja.getAttribute('data-foto');
+    var src = S.fotos && S.fotos[id];
+    clear(caja);
+    caja.appendChild(src ? el('img', { src: src, alt: 'Foto de ' + caja.getAttribute('data-nombre') }) : icon('box'));
+  }
+
+  function fotoProducto(p, clase) {
+    var caja = el('div', { class: 'prod-foto' + (clase ? ' ' + clase : ''), 'data-foto': p.id, 'data-nombre': p.nombre });
+    ponerFoto(caja);
+    return caja;
+  }
+
+  /** Las fotos se traen una vez por sesión y aparecen solas donde haga falta. */
+  function cargarFotos() {
+    if (S.fotos || S.fotosPidiendo) return;
+    S.fotosPidiendo = true;
+    call('fotosProductos').then(function (d) {
+      S.fotos = d.fotos;
+      S.fotosPidiendo = false;
+      document.querySelectorAll('[data-foto]').forEach(ponerFoto);
+    }, function () { S.fotosPidiendo = false; });
+  }
+
+  /** Achica la foto en el teléfono: pesa poco y sube rápido aunque la señal sea mala. */
+  function achicarFoto(archivo) {
+    return new Promise(function (ok, mal) {
+      var img = new Image();
+      var url = URL.createObjectURL(archivo);
+      img.onload = function () {
+        var escala = Math.min(1, 640 / Math.max(img.width, img.height));
+        var lienzo = document.createElement('canvas');
+        lienzo.width = Math.round(img.width * escala);
+        lienzo.height = Math.round(img.height * escala);
+        lienzo.getContext('2d').drawImage(img, 0, 0, lienzo.width, lienzo.height);
+        URL.revokeObjectURL(url);
+        var calidad = .8;
+        var dato = lienzo.toDataURL('image/jpeg', calidad);
+        while (dato.length > 180000 && calidad > .3) { calidad -= .15; dato = lienzo.toDataURL('image/jpeg', calidad); }
+        if (dato.length > 180000) mal(new Error('grande')); else ok(dato);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); mal(new Error('imagen')); };
+      img.src = url;
+    });
   }
 
   /* ---------------- Cómo usar la app ---------------- */
@@ -2833,14 +2943,20 @@
         el('div', { class: 'tuto-mapa' }, [el('span', { text: '1' })]),
         botonGuia('Guardar ubicación', true)
       ]) },
-      { paso: 3, titulo: 'Cargá un pedido', texto: 'Tocá el botón Pedido. Elegí el cliente, los productos y cuándo se entrega.', dibujo: telefonoGuia([
+      { paso: 3, titulo: 'Sumá tus productos', texto: 'En Productos cargás cada uno con su foto y sus precios por unidad, caja o bulto.', dibujo: telefonoGuia([
+        el('strong', { text: 'Productos' }),
+        el('div', { class: 'tuto-parada' }, [el('span', { text: '▣' }), 'Alfajor Ejemplo · Caja $ 12.000']),
+        el('div', { class: 'tuto-parada' }, [el('span', { text: '▣' }), 'Alfajor Mini · Bulto $ 40.000']),
+        botonGuia('Nuevo producto', true)
+      ]) },
+      { paso: 4, titulo: 'Cargá un pedido', texto: 'Tocá el botón Pedido. Elegí el cliente, los productos y cuándo se entrega.', dibujo: telefonoGuia([
         el('strong', { text: 'Nuevo pedido' }),
         el('div', { class: 'tuto-fila' }, [el('span', { text: 'Cliente' }), el('b', { text: 'Almacén Ejemplo' })]),
         el('div', { class: 'tuto-fila' }, [el('span', { text: 'Caja de alfajores' }), el('b', { text: '− 2 +' })]),
         el('div', { class: 'tuto-fila' }, [el('span', { text: 'Total' }), el('b', { text: '$ 24.000' })]),
         botonGuia('Guardar pedido', true)
       ]) },
-      { paso: 4, titulo: 'Armá el recorrido', texto: 'Aparecen los pedidos y los clientes que reciben ese día. Sumalos y la app sugiere el orden.', dibujo: telefonoGuia([
+      { paso: 5, titulo: 'Armá el recorrido', texto: 'Aparecen los pedidos y los clientes que reciben ese día. Sumalos y la app sugiere el orden.', dibujo: telefonoGuia([
         el('div', { class: 'tuto-card oscura' }, [el('div', { class: 'tuto-kicker', text: 'Volvés a las' }), el('div', { class: 'tuto-grande', text: '12:30' })]),
         el('div', { class: 'tuto-chico', text: 'Suelen recibir los lunes' }),
         ['Almacén Ejemplo · 08:15', 'Kiosco Ejemplo · 09:00'].map(function (t, i) {
@@ -2848,19 +2964,19 @@
         }),
         botonGuia('Guardar recorrido', true)
       ].reduce(function (a, b) { return a.concat(b); }, [])) },
-      { paso: 5, titulo: 'Salí a entregar', texto: 'En Hoy ves la próxima parada. Tocá Ir con Maps y, al llegar, volvé a la app.', dibujo: telefonoGuia([
+      { paso: 6, titulo: 'Salí a entregar', texto: 'En Hoy ves la próxima parada. Tocá Ir con Maps y, al llegar, volvé a la app.', dibujo: telefonoGuia([
         el('strong', { text: 'Hoy llevás 2 de 6' }),
         el('div', { class: 'tuto-barra' }, [el('i')]),
         tarjetaGuia(botonGuia('Ir con Maps', true))
       ]) },
-      { paso: 6, titulo: 'Entregá y cobrá', texto: 'Tocá Entregué y elegí si te pagó todo, una parte o nada. La deuda se actualiza sola.', dibujo: telefonoGuia([
+      { paso: 7, titulo: 'Entregá y cobrá', texto: 'Tocá Entregué y elegí si te pagó todo, una parte o nada. La deuda se actualiza sola.', dibujo: telefonoGuia([
         el('strong', { text: 'Entregar a Almacén Ejemplo' }),
         el('div', { class: 'tuto-chico', text: '¿Te pagó?' }),
         el('div', { class: 'tuto-grande', text: '$ 45.000' }),
         el('div', { class: 'tuto-chips' }, [el('span', { class: 'activo', text: 'Todo' }), el('span', { text: 'Una parte' }), el('span', { text: 'No pagó' })]),
         botonGuia('Entregué y cobré', true)
       ]) },
-      { paso: 7, titulo: 'Mirá cuánto vendiste', texto: 'Abrí el menú y tocá Panel. Ves lo que generaste para MINUÉ y tu comisión.', dibujo: telefonoGuia([
+      { paso: 8, titulo: 'Mirá cuánto vendiste', texto: 'Abrí el menú y tocá Panel. Ves lo que generaste para MINUÉ y tu comisión.', dibujo: telefonoGuia([
         el('div', { class: 'tuto-card oscura' }, [
           el('div', { class: 'tuto-kicker', text: 'Facturación para MINUÉ' }), el('div', { class: 'tuto-grande', text: '$ 1.250.000' }),
           el('div', { class: 'tuto-kicker', text: 'Tu comisión' }), el('div', { class: 'tuto-grande', text: '$ 125.000' })
@@ -3594,6 +3710,7 @@
     }
 
     /* 2. Productos */
+    cargarFotos();
     var productSection = el('section', { class: 'step card' }, [el('h2', { class: 'step-title' }, [el('span', { class: 'step-num', text: '2' }), '¿Qué lleva?'])]);
     main.appendChild(productSection);
     cat.productos.forEach(function (p) {
@@ -3620,7 +3737,7 @@
         save(); updateTotal();
       }
       qty.addEventListener('input', commit);
-      wrap.appendChild(el('div', { class: 'product-name', text: p.nombre }));
+      wrap.appendChild(el('div', { class: 'product-cabeza' }, [fotoProducto(p), el('div', { class: 'product-name', text: p.nombre })]));
       wrap.appendChild(el('div', { class: 'product-controls' }, [seg, el('div', { class: 'stepper' }, [
         el('button', { type: 'button', 'aria-label': 'Restar uno', text: '−', onclick: function () { qty.value = Math.max(0, (Number(qty.value) || 0) - 1); commit(); } }),
         qty,
@@ -4150,7 +4267,6 @@
     if (WEB && WEB.email) USER = WEB.email;
     if (WEB) {
       S.rol = load('minue.rol', '');
-      document.getElementById('menu-catalogo').hidden = false;
       document.getElementById('menu-panel').hidden = false;
       document.getElementById('menu-ajustes').hidden = S.rol !== 'admin';
       call('yo').then(function (y) {
