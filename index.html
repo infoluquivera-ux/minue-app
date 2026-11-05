@@ -475,6 +475,7 @@
       <button type="button" class="drawer-item" data-go="cobros" aria-label="Plata"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg><span>Plata</span></button>
     </nav>
     <div class="drawer-group">
+      <button id="menu-ajustes" type="button" class="drawer-item" data-go="ajustes" aria-label="Ajustes" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>Ajustes</span></button>
       <button id="zoom" type="button" class="drawer-item" aria-label="Cambiar el tamaño de la letra"><span class="drawer-aa" aria-hidden="true">Aa</span><span id="zoom-label">Letra normal</span></button>
       <button id="logout" type="button" class="drawer-item" aria-label="Salir" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5M15 8l4 4-4 4M19 12H9"/></svg><span>Salir</span></button>
     </div>
@@ -1231,7 +1232,7 @@
     });
     window.scrollTo(0, 0);
     setFab(true);
-    ({ inicio: renderHoy, recorrido: renderHoy, pedidos: renderPedidos, clientes: renderClientes, cobros: renderCobros }[tab])();
+    ({ inicio: renderHoy, recorrido: renderHoy, pedidos: renderPedidos, clientes: renderClientes, cobros: renderCobros, ajustes: renderAjustes }[tab])();
   }
 
   function refresh() {
@@ -1800,7 +1801,11 @@
           [row('Total', money(p.total), true), row('Pagó', money(p.pagado)), row('Debe', money(p.saldo), true)]))
       ];
       if (p.pagos.length) {
-        content.push(el('p', { class: 'small', text: 'Pagos: ' + p.pagos.map(function (k) { return dayLabel(k.fecha) + ' ' + money(k.importe) + ' (' + nice(k.medio) + ')'; }).join(' · ') }));
+        content.push(el('p', { class: 'small', text: 'Pagos' }));
+        p.pagos.forEach(function (k) {
+          content.push(el('div', { class: 'summary' }, [row(dayLabel(k.fecha) + ' · ' + nice(k.medio), money(k.importe)),
+            k.id ? btn('Corregir este cobro', 'ghost', function () { openAnularCobro(p, k); }) : null]));
+        });
       }
       var actions = el('div', { class: 'stack' });
       if (p.saldo > 0) actions.appendChild(btn('Cobrar', 'primary', function () { closeSheet(); openCobro(p, refresh); }, 'cash'));
@@ -1813,12 +1818,205 @@
       }
       actions.appendChild(linkBtn(p.mapsUrl, 'Ir con Maps', 'secondary', 'map'));
       actions.appendChild(btn('Ver cliente', 'ghost', function () { closeSheet(); go('clientes'); renderCliente(p.clientId); }));
+      if (WEB && !p.entregado) {
+        actions.appendChild(btn('Editar pedido', 'secondary', function () { openEditarPedido(p); }));
+        actions.appendChild(btn('Cancelar pedido', 'ghost', function () { openCancelarPedido(p); }));
+      }
+      if (WEB && p.entregado && S.rol === 'admin') {
+        actions.appendChild(btn('Volver a pendiente', 'ghost', function () {
+          write('deshacerEntrega', { orderId: p.orderId }, 'Volver a pendiente').then(function () { afterFix('El pedido volvió a pendiente.'); }, function (e) { toast(e.message || 'No se pudo.', { error: true }); });
+        }));
+      }
       actions.appendChild(btn('Cerrar', 'secondary', closeSheet));
       content.push(actions);
       openSheet(content, 'Pedido de ' + p.cliente);
     }, function (error) {
       openSheet([el('h2', { text: 'No se pudo abrir el pedido' }), el('p', { text: error.message || 'Probá de nuevo.' }), btn('Cerrar', 'secondary', closeSheet)]);
     });
+  }
+
+
+  /* ---------------- Corregir pedidos y cobros ---------------- */
+
+  function afterFix(message) {
+    closeSheet(true);
+    cacheClear();
+    toast(message);
+    refresh();
+  }
+
+  /** Hoja con un campo de motivo obligatorio y una acción final. */
+  function openMotivo(title, text, label, yes, onSend) {
+    var input = el('input', { class: 'input', maxlength: '120', 'aria-label': label });
+    var error = el('div', { class: 'error-box', hidden: true });
+    var ok = el('button', { class: 'btn primary', type: 'button', text: yes });
+    var requestId = uuid();
+    ok.addEventListener('click', function () {
+      if (!input.value.trim()) { error.textContent = 'Escribí el motivo.'; error.hidden = false; return; }
+      setBusy(ok, 'Guardando…');
+      onSend(input.value.trim(), requestId).then(null, function (e) {
+        unsetBusy(ok);
+        error.textContent = e.code === 'NETWORK' ? 'No hay señal. Quedó arriba para reintentar.' : e.message || 'No se pudo guardar.';
+        error.hidden = false;
+      });
+    });
+    openSheet([el('h2', { text: title }), el('p', { text: text }),
+      el('label', { class: 'field' }, [el('span', { text: label }), input]), error,
+      el('div', { class: 'stack', style: 'margin-top:14px' }, [ok, el('button', { class: 'btn secondary', type: 'button', text: 'Volver', onclick: closeSheet })])], title);
+  }
+
+  function openCancelarPedido(p) {
+    openMotivo('¿Cancelar este pedido?', 'El pedido de ' + p.cliente + ' deja de sumar y sale del recorrido. Queda guardado.', 'Por qué se cancela', 'Sí, cancelar pedido', function (motivo, requestId) {
+      return write('cancelarPedido', { requestId: requestId, orderId: p.orderId, motivo: motivo }, 'Cancelar pedido de ' + p.cliente).then(function () { afterFix('Pedido cancelado.'); });
+    });
+  }
+
+  function openAnularCobro(p, k) {
+    openMotivo('¿Corregir este cobro?', 'El cobro de ' + money(k.importe) + ' deja de sumar y vuelve a figurar lo que debe. Queda guardado quién lo corrigió.', 'Por qué se corrige', 'Sí, corregir cobro', function (motivo, requestId) {
+      return write('anularCobro', { requestId: requestId, cobroId: k.id, motivo: motivo }, 'Corregir cobro de ' + p.cliente).then(function () { afterFix('Cobro corregido.'); });
+    });
+  }
+
+  function openEditarPedido(p) {
+    var f = { fecha: p.fecha, desde: p.desde, hasta: p.hasta, prioridad: p.prioridad };
+    var cantidades = {};
+    var total = el('strong', { text: money(p.total) });
+    var error = el('div', { class: 'error-box', hidden: true });
+    var requestId = uuid();
+
+    function recalc() {
+      total.textContent = money(p.lineas.reduce(function (s, l) { return s + cantidades[l.id] * Number(l.precio); }, 0));
+    }
+
+    var lineas = p.lineas.map(function (l) {
+      cantidades[l.id] = l.cantidad;
+      var shown = el('span', { class: 'money', text: String(l.cantidad), 'aria-live': 'polite' });
+      function change(delta) {
+        cantidades[l.id] = Math.max(0, cantidades[l.id] + delta);
+        shown.textContent = String(cantidades[l.id]);
+        recalc();
+      }
+      return el('div', { class: 'summary' }, [
+        el('div', { text: l.producto + ' · ' + nice(l.presentacion) }),
+        el('div', { class: 'small', text: money(l.precio) + ' cada una. Si la bajás a 0, se quita.' }),
+        el('div', { class: 'stepper' }, [
+          el('button', { type: 'button', text: '−', 'aria-label': 'Menos ' + l.producto, onclick: function () { change(-1); } }), shown,
+          el('button', { type: 'button', text: '+', 'aria-label': 'Más ' + l.producto, onclick: function () { change(1); } })
+        ])
+      ]);
+    });
+
+    var fecha = el('input', { class: 'input', type: 'date', value: f.fecha, 'aria-label': 'Fecha de entrega' });
+    var desde = el('input', { class: 'input', type: 'time', value: f.desde, 'aria-label': 'Desde' });
+    var hasta = el('input', { class: 'input', type: 'time', value: f.hasta, 'aria-label': 'Hasta' });
+    var recibe = el('input', { class: 'input', maxlength: '80', value: p.recibe || '', 'aria-label': 'Quién recibe' });
+    var obs = el('textarea', { class: 'input', maxlength: '480', 'aria-label': 'Observaciones' });
+    obs.value = p.observaciones || '';
+    var prioridadBox = el('div');
+    function drawPrioridad() {
+      clear(prioridadBox);
+      prioridadBox.appendChild(chipRow([['NORMAL', 'Normal'], ['URGENTE', 'Urgente'], ['CRÍTICA', 'Crítica']], f.prioridad, function (v) { f.prioridad = v; drawPrioridad(); }, 'Prioridad'));
+    }
+    drawPrioridad();
+
+    var save = el('button', { class: 'btn primary', type: 'button', text: 'Guardar cambios' });
+    save.addEventListener('click', function () {
+      setBusy(save, 'Guardando…');
+      write('editarPedido', { requestId: requestId, orderId: p.orderId, rev: p.rev, fecha: fecha.value, desde: desde.value, hasta: hasta.value,
+        prioridad: f.prioridad, recibe: recibe.value, observaciones: obs.value,
+        lineas: p.lineas.map(function (l) { return { id: l.id, cantidad: cantidades[l.id] }; }) }, 'Editar pedido de ' + p.cliente).then(function () {
+        afterFix('Pedido actualizado.');
+      }, function (e) {
+        unsetBusy(save);
+        error.textContent = e.code === 'NETWORK' ? 'No hay señal. Quedó arriba para reintentar.' : e.message || 'No se pudo guardar.';
+        error.hidden = false;
+      });
+    });
+
+    openSheet([el('h2', { text: 'Editar pedido' }), el('p', { class: 'small', text: p.cliente })].concat(lineas, [
+      el('div', { class: 'summary' }, [el('div', { class: 'row' }, [el('span', { text: 'Total' }), total])]),
+      el('label', { class: 'field' }, [el('span', { text: 'Fecha de entrega' }), fecha]),
+      el('label', { class: 'field' }, [el('span', { text: 'Desde' }), desde]),
+      el('label', { class: 'field' }, [el('span', { text: 'Hasta' }), hasta]),
+      el('div', { class: 'field' }, [el('span', { text: 'Prioridad' }), prioridadBox]),
+      el('label', { class: 'field' }, [el('span', { text: 'Quién recibe' }), recibe]),
+      el('label', { class: 'field' }, [el('span', { text: 'Observaciones' }), obs]),
+      error,
+      el('div', { class: 'stack', style: 'margin-top:14px' }, [save, el('button', { class: 'btn secondary', type: 'button', text: 'Volver', onclick: closeSheet })])
+    ]), 'Editar pedido');
+  }
+
+  /* ---------------- Ajustes (solo administradores) ---------------- */
+
+  function celda(valor) {
+    var texto = typeof valor === 'number' ? String(valor).replace('.', ',') : String(valor === null || valor === undefined ? '' : valor);
+    if (typeof valor === 'string' && /^[=+\-@]/.test(texto)) texto = "'" + texto;
+    return '"' + texto.replace(/"/g, '""') + '"';
+  }
+
+  function descargar(tipo, boton) {
+    setBusy(boton, 'Preparando…');
+    call('exportar', { tipo: tipo }).then(function (d) {
+      unsetBusy(boton);
+      var lineas = [d.columnas.map(celda).join(';')].concat(d.filas.map(function (f) { return f.map(celda).join(';'); }));
+      var archivo = new Blob(['\ufeff' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+      var enlace = el('a', { download: d.nombre + '-' + todayKey() + '.csv' });
+      enlace.href = URL.createObjectURL(archivo);
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
+      setTimeout(function () { URL.revokeObjectURL(enlace.href); }, 10000);
+    }, function (e) {
+      unsetBusy(boton);
+      toast(e.message || 'No se pudo descargar.', { error: true });
+    });
+  }
+
+  function renderAjustes() {
+    S.current = renderAjustes;
+    setFab(false);
+    loading();
+    call('ajustes').then(function (a) {
+      clear(main);
+      main.appendChild(el('h1', { text: 'Ajustes' }));
+      var direccion = el('input', { class: 'input', maxlength: '160', value: a.direccionBase, 'aria-label': 'Dirección de salida' });
+      var comision = el('input', { class: 'input', inputmode: 'decimal', value: String(a.comision).replace('.', ','), 'aria-label': 'Comisión general en porcentaje' });
+      var error = el('div', { class: 'error-box', hidden: true });
+      var save = el('button', { class: 'btn primary', type: 'button', text: 'Guardar ajustes' });
+      save.addEventListener('click', function () {
+        error.hidden = true;
+        setBusy(save, 'Guardando…');
+        write('guardarAjustes', { direccionBase: direccion.value, comision: comision.value }, 'Guardar ajustes').then(function () {
+          unsetBusy(save);
+          toast('Ajustes guardados.');
+        }, function (e) {
+          unsetBusy(save);
+          error.textContent = e.message || 'No se pudo guardar.';
+          error.hidden = false;
+        });
+      });
+      main.appendChild(el('div', { class: 'card' }, [
+        el('label', { class: 'field' }, [el('span', { text: 'Dirección de salida' }), direccion]),
+        el('label', { class: 'field' }, [el('span', { text: 'Comisión general (%)' }), comision]),
+        el('p', { class: 'small', text: 'Se usa en los productos sin comisión propia. Las ventas ya hechas no cambian.' }),
+        error, save
+      ]));
+      main.appendChild(el('h2', { text: 'Descargar en Excel' }));
+      var zona = el('div', { class: 'stack' });
+      [['ventas', 'Ventas'], ['cobros', 'Cobros'], ['clientes', 'Clientes']].forEach(function (x) {
+        var b = btn(x[1], 'secondary', function () { descargar(x[0], b); });
+        zona.appendChild(b);
+      });
+      main.appendChild(zona);
+      main.appendChild(el('h2', { text: 'Usuarios' }));
+      a.usuarios.forEach(function (u) {
+        main.appendChild(el('div', { class: 'card' }, [
+          el('strong', { text: u.nombre }),
+          el('div', { class: 'small', text: u.correo }),
+          el('div', { class: 'small', text: (u.rol === 'admin' ? 'Administrador' : 'Repartidor') + (u.activo ? '' : ' · sin acceso') })
+        ]));
+      });
+    }, function (e) { showError(e, renderAjustes); });
   }
 
   /* ---------------- Nuevo pedido ---------------- */
@@ -2472,6 +2670,15 @@
 
   function start() {
     if (WEB && WEB.email) USER = WEB.email;
+    if (WEB) {
+      S.rol = load('minue.rol', '');
+      document.getElementById('menu-ajustes').hidden = S.rol !== 'admin';
+      call('yo').then(function (y) {
+        S.rol = y.rol;
+        store('minue.rol', y.rol);
+        document.getElementById('menu-ajustes').hidden = y.rol !== 'admin';
+      }, function () { /* sin señal: queda lo último conocido */ });
+    }
     renderOutbox();
     go('inicio');
     if (outbox().length && navigator.onLine !== false) flushOutbox();
