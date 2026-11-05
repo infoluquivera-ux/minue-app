@@ -581,6 +581,13 @@
     .tuto-pie { padding: 4px 0; }
     .tuto-pie .tuto-puntos { margin: 2px 0 6px; }
   }
+  @media (max-width: 959px) {
+    body.en-guia .tabbar, body.en-guia .fab { display: none; }
+    body.en-guia .tuto-pie { bottom: env(safe-area-inset-bottom); }
+    body.en-guia main { padding-bottom: 8px; }
+    .tuto-ventajas { gap: 6px; }
+    .tuto-ventajas li { padding: 8px 10px; font-size: 15px; line-height: 1.25; }
+  }
 </style>
 
   <style>
@@ -1632,6 +1639,7 @@
     if (tab === 'recorrido') tab = 'inicio';
     if (!sheet.hidden) closeSheet(true);
     S.tab = tab;
+    document.body.classList.toggle('en-guia', tab === 'ayuda');
     document.querySelectorAll('.tab, .drawer-item[data-go]').forEach(function (t) {
       if ((t.getAttribute('data-tab') || t.getAttribute('data-go')) === tab) t.setAttribute('aria-current', 'page');
       else t.removeAttribute('aria-current');
