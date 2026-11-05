@@ -404,13 +404,19 @@
 </style>
 
   <style>
-  .login { position: fixed; inset: 0; z-index: 50; background: var(--c-brand-black); color: var(--c-inverse-text);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-4); padding: var(--sp-6); text-align: center; }
+  .login { position: fixed; inset: 0; z-index: 70; overflow: auto; background: var(--c-brand-black); color: var(--c-inverse-text);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-4);
+    padding: calc(var(--sp-6) + env(safe-area-inset-top)) var(--sp-5) calc(var(--sp-6) + env(safe-area-inset-bottom)); text-align: center; }
   .login[hidden] { display: none; }
   .login h1 { font-size: var(--fs-title); margin: 0; }
   .login-logo { border-radius: var(--r-xl); }
-  .login-msg { color: var(--c-inverse-muted); margin: 0; max-width: 320px; }
-  .login-btn { min-height: 48px; }
+  .login-msg { color: var(--c-inverse-text); background: var(--c-inverse-chip); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); margin: 0; width: 100%; max-width: 340px; }
+  .login-form { display: flex; flex-direction: column; gap: var(--sp-3); width: 100%; max-width: 340px; text-align: left; }
+  .login-field { display: flex; flex-direction: column; gap: var(--sp-1); font-weight: 600; }
+  .login-field input { min-height: var(--tap); border-radius: var(--r-md); border: 2px solid var(--c-inverse-border); background: var(--stone-50); color: var(--stone-900); padding: 0 var(--sp-3); font-size: 18px; }
+  .login-submit { min-height: var(--tap); border: 0; border-radius: var(--btn-radius); background: var(--stone-50); color: var(--stone-900); font-size: 18px; font-weight: 700; cursor: pointer; }
+  .login-submit:disabled { opacity: .7; }
+  .login-link { min-height: 48px; border: 0; background: none; color: var(--c-inverse-muted); text-decoration: underline; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -479,7 +485,184 @@
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <div id="user-name" data-name="" hidden></div>
-  <script>window.MINUE_WEB = {"apiUrl":"https://script.google.com/macros/s/AKfycbz0AFVzezMxFmUXQerdCDbOk1EH1imihI-fy37FLafL8tlKu1bBoAM0sv5SUuf4kS2hsQ/exec","clientId":"300924885825-qm6in6imr4tm3v1lb6octo14hm9e94kt.apps.googleusercontent.com"};</script>
+  <script>window.MINUE_WEB = {"url":"https://pzxpquklyajfngzmkgmn.supabase.co","key":"sb_publishable_Pgru1rJz2jWEulxUIRuzzg__2FKjSuk"};</script>
+<script>/*
+ * MINUÉ · orden del recorrido. Corre en el teléfono con los datos de app.recorrido_datos().
+ * Orden APROXIMADO (no usa tráfico ni calles reales):
+ * 1) Parada elegida por el usuario. 2) Prioridad CRÍTICA, URGENTE, NORMAL.
+ * 3) Dentro de cada grupo: camino más corto en línea recta (vecino más cercano + 2-opt), penalizando llegar tarde.
+ * Sin coordenadas: se usa la distancia cargada del cliente (más lejos primero).
+ */
+(function (root) {
+  'use strict';
+  var ROAD_FACTOR = 1.35;
+  var AVG_KMH = 25;
+  var SERVICE_MIN = 10;
+  var MAX_STOPS = 20;
+  var RANK = { 'CRÍTICA': 0, 'URGENTE': 1, 'NORMAL': 2 };
+
+  function haversineKm(a, b) {
+    var R = 6371;
+    var dLat = (b.lat - a.lat) * Math.PI / 180;
+    var dLng = (b.lng - a.lng) * Math.PI / 180;
+    var x = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  }
+
+  function travelMin(a, b) {
+    if (a.lat == null || b.lat == null) return 0;
+    return haversineKm(a, b) * ROAD_FACTOR / AVG_KMH * 60;
+  }
+
+  function toMinutes(text) {
+    var m = /^(\d{1,2}):(\d{2})/.exec(String(text || ''));
+    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  }
+
+  function pathCost(path, start, end, clock, today) {
+    var km = 0;
+    var penalty = 0;
+    var time = clock;
+    var prev = start;
+    path.forEach(function (s) {
+      var leg = haversineKm(prev, s) * ROAD_FACTOR;
+      km += leg;
+      time += leg / AVG_KMH * 60;
+      var limit = toMinutes(s.hasta);
+      if (s.fecha === today && limit !== null && time > limit) penalty += 30;
+      time += SERVICE_MIN;
+      prev = s;
+    });
+    return km + haversineKm(prev, end) * ROAD_FACTOR + penalty;
+  }
+
+  function optimize(stops, start, end, clock, today) {
+    if (stops.length <= 1) return stops.slice();
+    var remaining = stops.slice();
+    var path = [];
+    var current = start;
+    while (remaining.length) {
+      var bestIndex = 0;
+      var bestDist = Infinity;
+      for (var i = 0; i < remaining.length; i++) {
+        var d = haversineKm(current, remaining[i]);
+        if (d < bestDist) { bestDist = d; bestIndex = i; }
+      }
+      current = remaining.splice(bestIndex, 1)[0];
+      path.push(current);
+    }
+    var best = pathCost(path, start, end, clock, today);
+    var improved = true;
+    var guard = 0;
+    while (improved && guard++ < 50) {
+      improved = false;
+      for (var a = 0; a < path.length - 1; a++) {
+        for (var b = a + 1; b < path.length; b++) {
+          var candidate = path.slice(0, a).concat(path.slice(a, b + 1).reverse(), path.slice(b + 1));
+          var cost = pathCost(candidate, start, end, clock, today);
+          if (cost + 1e-9 < best) { best = cost; path = candidate; improved = true; }
+        }
+      }
+    }
+    return path;
+  }
+
+  function directions(address) {
+    return address ? 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + encodeURIComponent(address) : '';
+  }
+
+  function routeUrl(stops, base) {
+    if (!stops.length) return '';
+    var points = stops.slice(0, 9).map(function (s) { return s.direccionCompleta; });
+    return 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + encodeURIComponent(base) +
+      '&waypoints=' + encodeURIComponent(points.join('|'));
+  }
+
+  /** datos: resultado de app.recorrido_datos(). nowMin: minutos del día en Argentina. */
+  function build(datos, nowMin) {
+    var today = datos.hoy;
+    var base = datos.base || {};
+    var from = datos.desde && typeof datos.desde.lat === 'number' ? datos.desde : base;
+    var stops = (datos.pendientes || []).map(function (s) {
+      s.rank = RANK.hasOwnProperty(s.prioridad) ? RANK[s.prioridad] : 2;
+      return s;
+    });
+
+    var ordered = [];
+    var pinned = stops.filter(function (s) { return s.orderId === datos.elegida; })[0];
+    if (pinned) ordered.push(pinned);
+    var rest = stops.filter(function (s) { return s !== pinned; });
+    var cursor = pinned && pinned.lat !== null ? pinned : from;
+    var clock = nowMin + (pinned ? travelMin(from, pinned) + SERVICE_MIN : 0);
+
+    [0, 1, 2].forEach(function (rank) {
+      var group = rest.filter(function (s) { return s.rank === rank; });
+      if (!group.length) return;
+      var located = group.filter(function (s) { return s.lat !== null && cursor.lat != null && base.lat != null; });
+      var unlocated = group.filter(function (s) { return located.indexOf(s) === -1; });
+      unlocated.sort(function (a, b) { return (b.km || 0) - (a.km || 0); });
+      optimize(located, cursor, base, clock, today).concat(unlocated).forEach(function (s) {
+        ordered.push(s);
+        if (s.lat !== null) {
+          clock += travelMin(cursor, s) + SERVICE_MIN;
+          cursor = s;
+        }
+      });
+    });
+
+    var visible = ordered.slice(0, MAX_STOPS);
+    var etaCursor = from;
+    var eta = nowMin;
+    var located = 0;
+    var publicStops = visible.map(function (s, i) {
+      var warning = '';
+      if (s.lat !== null) located++;
+      if (s.lat !== null && etaCursor.lat != null) {
+        eta += travelMin(etaCursor, s);
+        var limit = toMinutes(s.hasta);
+        if (s.fecha === today && limit !== null && eta > limit) warning = 'Puede llegar después de las ' + s.hasta;
+        eta += SERVICE_MIN;
+        etaCursor = s;
+      }
+      return {
+        orden: i + 1, orderId: s.orderId, clientId: s.clientId, cliente: s.cliente, direccion: s.direccion,
+        localidad: s.localidad, direccionCompleta: s.direccionCompleta, desde: s.desde, hasta: s.hasta, fecha: s.fecha,
+        atrasado: s.atrasado, prioridad: s.prioridad, estado: s.estado, total: s.total, saldo: s.saldo, recibe: s.recibe,
+        observaciones: s.observaciones, instrucciones: s.instrucciones, telefono: s.telefono, whatsapp: s.whatsapp,
+        elegida: s.orderId === datos.elegida, sinUbicacion: s.lat === null, aviso: warning, mapsUrl: directions(s.direccionCompleta)
+      };
+    });
+
+    var total = publicStops.reduce(function (sum, s) { return sum + Number(s.saldo); }, 0);
+    return {
+      hoy: today,
+      started: !!datos.started,
+      stops: publicStops,
+      restantes: publicStops.length,
+      ocultas: Math.max(0, ordered.length - visible.length),
+      entregadasHoy: datos.entregadasHoy,
+      aCobrar: Math.round(total * 100) / 100,
+      desde: datos.desde && datos.desde.label ? datos.desde.label : 'Base',
+      base: base.address,
+      volverBaseUrl: directions(base.address),
+      recorridoCompletoUrl: routeUrl(publicStops, base.address),
+      modo: located === visible.length ? 'aproximado' : (located ? 'mixto' : 'distancia-cargada'),
+      explicacion: 'Las paradas van por prioridad y cercanía. No tiene en cuenta el tráfico ni los cortes.'
+    };
+  }
+
+  /** Minutos del día en Argentina, sin importar la zona del teléfono. */
+  function nowMinutes(date) {
+    var text = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', hour12: false }).format(date || new Date());
+    return (toMinutes(text) || 0) % 1440;
+  }
+
+  var api = { build: build, nowMinutes: nowMinutes, haversineKm: haversineKm };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.MINUE_RUTA = api;
+})(this);
+</script>
 <script>
 (function () {
   'use strict';
@@ -625,24 +808,34 @@
 
   function call(action, payload) { return WEB ? callHttp(action, payload, false) : callGas(action, payload); }
 
+  /** El orden del recorrido se calcula en el teléfono con los datos que manda la base. */
+  function withRoute(action, data) {
+    var ruta = window.MINUE_RUTA;
+    if (!data) return data;
+    if (action === 'recorrido') return ruta.build(data, ruta.nowMinutes());
+    if (data.recorrido) data.recorrido = ruta.build(data.recorrido, ruta.nowMinutes());
+    return data;
+  }
+
   function callHttp(action, payload, retried) {
     return window.MINUE_AUTH.getToken().then(function (token) {
       var controller = window.AbortController ? new AbortController() : null;
       var timer = setTimeout(function () { if (controller) controller.abort(); }, 30000);
-      return fetch(WEB.apiUrl, {
+      return fetch(WEB.url + '/rest/v1/rpc/api', {
         method: 'POST',
-        redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: action, payload: payload || {}, idToken: token }),
+        headers: { apikey: WEB.key, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion: action, datos: payload || {} }),
         signal: controller ? controller.signal : undefined
-      }).then(function (response) { return response.json(); }).then(function (res) {
+      }).then(function (response) {
         clearTimeout(timer);
-        if (res && res.ok) return res.data;
-        if (res && res.code === 'AUTH' && !retried) {
+        if (response.status === 401 && !retried) {
           return window.MINUE_AUTH.refresh().then(function () { return callHttp(action, payload, true); });
         }
-        if (res && (res.code === 'AUTH' || res.code === 'DENIED')) window.MINUE_AUTH.rejected(res);
-        throw res || { code: 'INTERNAL', message: 'No pudimos completar la operación. Probá de nuevo.' };
+        return response.json().then(function (res) {
+          if (res && res.ok) return withRoute(action, res.data);
+          if (res && res.code === 'DENIED') window.MINUE_AUTH.rejected(res);
+          throw res && res.message ? res : { code: 'INTERNAL', message: 'No pudimos completar la operación. Probá de nuevo.' };
+        });
       }, function () {
         clearTimeout(timer);
         throw NETWORK_ERROR;
@@ -2289,19 +2482,17 @@
 </script>
 
 <script>/*
- * MINUÉ · inicio de sesión de la app instalable.
- * Pide el token a Google (Google Identity Services), lo guarda en este celular y lo manda a la API.
- * El servidor lo vuelve a validar siempre: acá solo se usa para mostrar el nombre.
+ * MINUÉ · inicio de sesión con usuario y contraseña (Supabase Auth, sin librerías externas).
+ * La sesión queda en este teléfono y se renueva sola. Los permisos los decide la base de datos, nunca esta página.
  */
 (function () {
   'use strict';
   var cfg = window.MINUE_WEB;
   var KEY = 'minue.sesion';
   var session = read();
-  var waiters = [];
   var started = false;
   var overlay = null;
-  var gisLoading = false;
+  var refreshing = null;
 
   function read() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
   function save() {
@@ -2311,46 +2502,30 @@
     } catch (e) { /* sin almacenamiento */ }
   }
 
-  function decode(jwt) {
-    var part = String(jwt).split('.')[1] || '';
-    var json = decodeURIComponent(escape(atob(part.split('-').join('+').split('_').join('/'))));
-    return JSON.parse(json);
+  function fresh() { return session && session.exp * 1000 > Date.now() + 60000; }
+
+  function keep(data) {
+    session = {
+      access: data.access_token, refresh: data.refresh_token,
+      exp: data.expires_at || Math.floor(Date.now() / 1000) + (data.expires_in || 3600),
+      email: data.user && data.user.email ? data.user.email : (session && session.email) || ''
+    };
+    save();
   }
 
-  function fresh() { return session && session.exp * 1000 > Date.now() + 60000; }
+  function auth(path, body, token) {
+    return fetch(cfg.url + '/auth/v1/' + path, {
+      method: path === 'user' ? 'PUT' : 'POST',
+      headers: { apikey: cfg.key, 'Content-Type': 'application/json', Authorization: 'Bearer ' + (token || cfg.key) },
+      body: JSON.stringify(body || {})
+    });
+  }
 
   function startApp() {
     if (started) return;
     started = true;
     cfg.email = session.email;
     window.MINUE_START();
-  }
-
-  function accept(response) {
-    try {
-      var p = decode(response.credential);
-      session = { token: response.credential, exp: p.exp, email: p.email, name: p.given_name || p.name || '' };
-    } catch (e) { return showLogin('No pudimos leer la sesión. Probá de nuevo.'); }
-    save();
-    hideLogin();
-    waiters.splice(0).forEach(function (w) { w.resolve(session.token); });
-    startApp();
-  }
-
-  function loadGis(then) {
-    if (window.google && window.google.accounts && window.google.accounts.id) return then();
-    if (gisLoading) return;
-    gisLoading = true;
-    var s = document.createElement('script');
-    s.src = 'https://accounts.google.com/gsi/client';
-    s.async = true;
-    s.onload = function () { gisLoading = false; then(); };
-    s.onerror = function () { gisLoading = false; showLogin('No hay conexión para entrar con Google.'); };
-    document.head.appendChild(s);
-  }
-
-  function init() {
-    google.accounts.id.initialize({ client_id: cfg.clientId, callback: accept, auto_select: true, cancel_on_tap_outside: false });
   }
 
   function node(tag, attrs, text) {
@@ -2360,79 +2535,169 @@
     return n;
   }
 
-  function showLogin(message, denied) {
+  function frame(title, message) {
     if (!overlay) {
       overlay = node('div', { id: 'login', class: 'login', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'login-title' });
       document.body.appendChild(overlay);
     }
     while (overlay.firstChild) overlay.removeChild(overlay.firstChild);
     overlay.hidden = false;
-    overlay.appendChild(node('img', { class: 'login-logo', alt: 'MINUÉ', width: '160', height: '160', src: 'icon-192.png' }));
-    overlay.appendChild(node('h1', { id: 'login-title' }, denied ? 'Esta cuenta no puede entrar' : 'Entrá con tu cuenta de Google'));
-    if (message) overlay.appendChild(node('p', { class: 'login-msg', role: 'alert' }, message));
-    var slot = node('div', { id: 'login-btn', class: 'login-btn' });
-    overlay.appendChild(slot);
-    if (!cfg.clientId) {
-      slot.appendChild(node('p', { class: 'login-msg' }, 'Falta configurar el inicio de sesión de Google.'));
-      return;
-    }
-    loadGis(function () {
-      init();
-      google.accounts.id.renderButton(slot, { type: 'standard', theme: 'filled_black', size: 'large', text: 'continue_with', shape: 'pill', locale: 'es', width: 280 });
+    overlay.appendChild(node('img', { class: 'login-logo', alt: 'MINUÉ', width: '120', height: '120', src: 'icon-192.png' }));
+    overlay.appendChild(node('h1', { id: 'login-title' }, title));
+    var note = node('p', { class: 'login-msg', role: 'alert' }, message || '');
+    note.hidden = !message;
+    overlay.appendChild(note);
+    return note;
+  }
+
+  function field(form, label, attrs) {
+    var box = node('label', { class: 'login-field' });
+    box.appendChild(node('span', {}, label));
+    var input = node('input', attrs);
+    box.appendChild(input);
+    form.appendChild(box);
+    return input;
+  }
+
+  function submitButton(form, text) {
+    var button = node('button', { type: 'submit', class: 'login-submit' }, text);
+    form.appendChild(button);
+    return button;
+  }
+
+  function busy(button, on, text) {
+    button.disabled = on;
+    button.textContent = text;
+  }
+
+  function showLogin(message) {
+    var note = frame('Entrá a MINUÉ', message);
+    var form = node('form', { class: 'login-form' });
+    var email = field(form, 'Correo', { type: 'email', autocomplete: 'username', inputmode: 'email', required: 'required' });
+    if (session && session.email) email.value = session.email;
+    var pass = field(form, 'Contraseña', { type: 'password', autocomplete: 'current-password', required: 'required' });
+    var button = submitButton(form, 'Entrar');
+    var forgot = node('button', { type: 'button', class: 'login-link' }, 'Olvidé mi contraseña');
+    form.appendChild(forgot);
+    overlay.appendChild(form);
+
+    function say(text) { note.textContent = text; note.hidden = false; }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      busy(button, true, 'Entrando…');
+      auth('token?grant_type=password', { email: email.value.trim(), password: pass.value }).then(function (res) {
+        return res.json().then(function (data) {
+          busy(button, false, 'Entrar');
+          if (!res.ok) return say(res.status === 429 ? 'Demasiados intentos. Esperá unos minutos.' : 'El correo o la contraseña no son correctos.');
+          clearCache();
+          keep(data);
+          pass.value = '';
+          overlay.hidden = true;
+          if (started) location.reload(); else startApp();
+        });
+      }).catch(function () {
+        busy(button, false, 'Entrar');
+        say('No hay señal para entrar. Probá de nuevo.');
+      });
+    });
+
+    forgot.addEventListener('click', function () {
+      var value = email.value.trim();
+      if (!value) return say('Escribí tu correo y tocá de nuevo.');
+      auth('recover', { email: value }).then(function (res) {
+        say(res.ok ? 'Si el correo existe, te llegó un mensaje para cambiar la contraseña.' : 'No pudimos mandar el mensaje. Probá más tarde.');
+      }).catch(function () { say('No hay señal. Probá de nuevo.'); });
+    });
+    setTimeout(function () { (email.value ? pass : email).focus(); }, 30);
+  }
+
+  /** Viene del enlace del correo de recuperación: pide la contraseña nueva. */
+  function showRecovery(token) {
+    var note = frame('Elegí una contraseña nueva');
+    var form = node('form', { class: 'login-form' });
+    var pass = field(form, 'Contraseña nueva', { type: 'password', autocomplete: 'new-password', minlength: '12', required: 'required' });
+    var button = submitButton(form, 'Guardar contraseña');
+    overlay.appendChild(form);
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      busy(button, true, 'Guardando…');
+      auth('user', { password: pass.value }, token).then(function (res) {
+        busy(button, false, 'Guardar contraseña');
+        if (!res.ok) {
+          note.textContent = 'No se pudo guardar. Usá al menos 12 caracteres o pedí otro correo.';
+          note.hidden = false;
+          return;
+        }
+        history.replaceState(null, '', location.pathname);
+        session = null;
+        save();
+        showLogin('Listo. Entrá con tu contraseña nueva.');
+      }).catch(function () {
+        busy(button, false, 'Guardar contraseña');
+        note.textContent = 'No hay señal. Probá de nuevo.';
+        note.hidden = false;
+      });
     });
   }
 
-  function hideLogin() { if (overlay) overlay.hidden = true; }
-
-  function silent() {
-    loadGis(function () {
-      init();
-      google.accounts.id.prompt(function (n) {
-        if (n.isNotDisplayed() || n.isSkippedMoment()) showLogin();
-      });
-    });
+  function clearCache() {
+    try { localStorage.removeItem('minue.cache.v2'); } catch (e) { /* sin almacenamiento */ }
   }
 
   window.MINUE_AUTH = {
     getToken: function () {
-      if (fresh()) return Promise.resolve(session.token);
+      if (fresh()) return Promise.resolve(session.access);
       if (navigator.onLine === false) return Promise.reject({ code: 'NETWORK', message: 'No hay conexión.' });
       return window.MINUE_AUTH.refresh();
     },
+    /** Renueva la sesión sin pedir la contraseña. Varias llamadas juntas comparten el mismo pedido. */
     refresh: function () {
-      return new Promise(function (resolve, reject) {
-        waiters.push({ resolve: resolve, reject: reject });
-        silent();
-        setTimeout(function () {
-          var i = waiters.findIndex(function (w) { return w.resolve === resolve; });
-          if (i !== -1) {
-            waiters.splice(i, 1);
-            showLogin();
-            reject({ code: 'AUTH', message: 'Entrá de nuevo con Google.' });
-          }
-        }, 8000);
-      });
-    },
-    rejected: function (res) {
-      if (res.code === 'DENIED') {
-        session = null;
-        save();
-        if (window.google && google.accounts) google.accounts.id.disableAutoSelect();
-        showLogin('Esa cuenta no está autorizada. Entrá con otra.', true);
-      } else {
-        session = Object.assign({}, session, { exp: 0 });
-        save();
+      if (refreshing) return refreshing;
+      if (!session || !session.refresh) {
+        showLogin();
+        return Promise.reject({ code: 'AUTH', message: 'Entrá con tu usuario.' });
       }
+      refreshing = auth('token?grant_type=refresh_token', { refresh_token: session.refresh }).then(function (res) {
+        return res.json().then(function (data) {
+          refreshing = null;
+          if (!res.ok) {
+            session = { email: session.email };
+            save();
+            showLogin('Tu sesión venció. Entrá de nuevo.');
+            throw { code: 'AUTH', message: 'Entrá de nuevo.' };
+          }
+          keep(data);
+          return session.access;
+        });
+      }, function () {
+        refreshing = null;
+        throw { code: 'NETWORK', message: 'No hay conexión.' };
+      });
+      return refreshing;
     },
-    signOut: function () {
+    rejected: function () {
       session = null;
       save();
-      if (window.google && google.accounts) google.accounts.id.disableAutoSelect();
-      showLogin();
+      clearCache();
+      showLogin('Esa cuenta no está autorizada.');
+    },
+    signOut: function () {
+      var token = session && session.access;
+      clearCache();
+      function end() {
+        session = null;
+        save();
+        location.reload();
+      }
+      if (!token || navigator.onLine === false) return end();
+      auth('logout', {}, token).then(end, end);
     }
   };
 
-  if (session && session.token) startApp();
+  var hash = new URLSearchParams(location.hash.slice(1));
+  if (hash.get('type') === 'recovery' && hash.get('access_token')) showRecovery(hash.get('access_token'));
+  else if (session && session.refresh) startApp();
   else showLogin();
 
   if ('serviceWorker' in navigator) {
