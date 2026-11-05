@@ -3030,7 +3030,10 @@
     return new Promise(function (ok, mal) {
       var img = new Image();
       var url = URL.createObjectURL(archivo);
+      // Si el teléfono no logra abrir la foto, avisa en lugar de quedar en silencio.
+      var espera = setTimeout(function () { URL.revokeObjectURL(url); mal(new Error('tarda')); }, 20000);
       img.onload = function () {
+        clearTimeout(espera);
         var lado = Math.min(img.width, img.height);
         var lienzo = document.createElement('canvas');
         lienzo.width = lienzo.height = 360;
@@ -3040,9 +3043,16 @@
         if (dato.length > 110000) dato = lienzo.toDataURL('image/jpeg', .55);
         if (dato.length > 110000) mal(new Error('grande')); else ok(dato);
       };
-      img.onerror = function () { URL.revokeObjectURL(url); mal(new Error('imagen')); };
+      img.onerror = function () { clearTimeout(espera); URL.revokeObjectURL(url); mal(new Error('imagen')); };
       img.src = url;
     });
+  }
+
+  function errorDeFoto(archivo, e) {
+    if (/hei[cf]/i.test((archivo.type || '') + ' ' + (archivo.name || ''))) return 'Esa foto está en formato HEIC y este teléfono no puede abrirla. Probá con una captura o con otra foto.';
+    if (e.message === 'tarda') return 'La foto tardó demasiado en abrirse. Probá con otra.';
+    if (e.message === 'grande') return 'La foto pesa demasiado. Probá con otra.';
+    return 'No pudimos abrir esa foto. Probá con otra.';
   }
 
   function openPerfil() {
@@ -3063,9 +3073,16 @@
       });
     }
     archivo.addEventListener('change', function () {
-      if (!archivo.files[0]) return;
-      recortarFoto(archivo.files[0]).then(function (dato) { guardar(dato, elegir); }, function () {
-        error.textContent = 'No pudimos usar esa foto. Probá con otra.';
+      var elegido = archivo.files[0];
+      if (!elegido) return;
+      error.hidden = true;
+      setBusy(elegir, 'Preparando foto…');
+      recortarFoto(elegido).then(function (dato) {
+        unsetBusy(elegir);
+        guardar(dato, elegir);
+      }, function (e) {
+        unsetBusy(elegir);
+        error.textContent = errorDeFoto(elegido, e);
         error.hidden = false;
       });
       archivo.value = '';
